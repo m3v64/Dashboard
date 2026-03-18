@@ -1,42 +1,94 @@
 #root {
-  max-width: 1280px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  padding: 1.5rem;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.container-dashboard {
+  display: grid;
+  gap: 1rem;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.dashboard-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.dashboard-header h1 {
+  margin: 0;
+  font-size: clamp(1.4rem, 2.8vw, 2rem);
 }
 
-.card {
-  padding: 2em;
+.dashboard-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
 }
 
-.read-the-docs {
-  color: #888;
+.dashboard-meta span {
+  background: #1f2937;
+  color: #f3f4f6;
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.9rem;
+}
+
+.dashboard-meta button {
+  border: 1px solid #1f2937;
+  background: #f9fafb;
+  color: #111827;
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.8rem;
+}
+
+.instance-group {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+  background: #ffffff;
+}
+
+.instance-group h2 {
+  margin: 0 0 0.8rem;
+  font-size: 1rem;
+  color: #111827;
+}
+
+.container-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.container-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.65rem;
+  padding: 0.75rem;
+  text-align: left;
+  background: #f9fafb;
+}
+
+.container-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.container-card p {
+  margin: 0.25rem 0;
+  color: #374151;
+  font-size: 0.9rem;
+  word-break: break-word;
+}
+
+.state-message {
+  margin: 0.2rem 0;
+  color: #374151;
+}
+
+.state-message.error {
+  color: #b91c1c;
 }
