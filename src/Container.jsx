@@ -1,4 +1,4 @@
-export function Container({
+export default function Container({
     name, 
     imageName
 }) 

@@ -1,41 +1,57 @@
-import { useEffect, useState } from 'react'
-import { Container } from './Container.jsx'
+import { useMemo } from 'react'
+import { useQueries, PromQL } from './Querie'
+import Container from './Container.jsx'
+import Source from './Source.jsx'
 
 export default function App() {
-  const [apiResponse, setApiResponse] = useState([])
-  const [query, setQuery] = useState('container_health_state{name=~".+"}')
+  const queries = useMemo(() => ({
+      sources: PromQL.sources,
+      containers: PromQL.containers
+    }), [])
+  const { data, error } = useQueries(queries)
 
-  useEffect(() => {
-    fetch(`/api/v1/query?query=${encodeURIComponent(query)}`)
-      .then(async (res) => {
-        const data = await res.json().catch(() => undefined)
+  const sources = data.sources ?? []
+  const containers = data.containers ?? []
 
-        if (!res.ok) {
-          console.error('fetch failed:', data?.error ?? res.statusText)
-        }
+  const containersBySource = useMemo(() => {
+    const index = new Map()
 
-        return data
-      })
-      .then((data) => {
-        const results = data?.data?.result ?? []
-        setApiResponse(results)
-        console.log('Prometheus results:', results)
-      })
-      .catch((err) => {
-        console.error('fetch failed:', err)
-        setApiResponse([])
-      })
-  }, [query])
+    for (const result of containers) {
+      const metric = result?.metric ?? {}
+      const job = metric.job
+      if (!job) continue
+
+      const list = index.get(job)
+      if (list) list.push(result)
+      else index.set(job, [result])
+    }
+
+    return index
+  }, [containers])
 
   return (
     <>
-      {apiResponse.map((result) => {
-        const metric = result?.metric ?? {}
-        const name = metric.name ?? metric.container_label_com_docker_compose_service ?? 'unknown'
-        const imageName = metric.image ?? ''
+      {
+        !error && sources.map((result) => {
+          const metric = result?.metric ?? {}
+          const sourceName = metric.scrape_job ?? 'not found'
+          const matchingContainers = containersBySource.get(metric.scrape_job) ?? []
 
-        return <Container key={metric.id ?? name} name={name} imageName={imageName} />
-      })}
+          return (
+            <Source key={metric.id ?? sourceName} name={sourceName}>
+              {
+                matchingContainers.map((result) => {
+                  const metric = result?.metric ?? {}
+                  const name = metric.name ?? metric.container_label_com_docker_compose_service ?? 'not found'
+                  const imageName = metric.image ?? 'not found'
+
+                  return <Container key={metric.id ?? name} name={name} imageName={imageName} />
+                })
+              }
+            </Source>
+          )
+        })
+      }
     </>
   )
 }
