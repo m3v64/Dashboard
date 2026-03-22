@@ -1,7 +1,12 @@
-function Container() {
+export function Container({
+    name, 
+    imageName
+}) 
+{
     return (
-        <div></div>
+        <div>
+            <div>{name}</div>
+            <div>{imageName}</div>
+        </div>
     )
 }
-
-export default Container
