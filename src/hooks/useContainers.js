@@ -1,0 +1,162 @@
+import { useMemo } from 'react'
+import { useQueries, PromQL } from '../Query'
+
+// Joins multiple Prometheus instant-query results into unified container objects
+export function useContainers(interval = 15000) {
+  const queries = useMemo(() => ({
+    containers:  PromQL.containers,
+    cpuRate:     PromQL.cpuRate,
+    memoryUsage: PromQL.memoryUsage,
+    memoryLimit: PromQL.memoryLimit,
+    networkRx:   PromQL.networkRx,
+    networkTx:   PromQL.networkTx,
+    diskRead:    PromQL.diskRead,
+    diskWrite:   PromQL.diskWrite,
+    startTime:   PromQL.startTime,
+  }), [])
+
+  const { data, error } = useQueries(queries, interval)
+
+  const containers = useMemo(() => {
+    const raw = data.containers ?? []
+    if (raw.length === 0) return []
+
+    // Deduplicate container_last_seen results by name
+    const seen = new Map()
+    for (const r of raw) {
+      const name = r.metric?.name
+      if (name && !seen.has(name)) seen.set(name, r)
+    }
+    const unique = Array.from(seen.values())
+
+    // Index each metric set by container name, summing values when multiple results exist
+    // (e.g. network has per-interface results, disk has per-device results)
+    const index = (results) => {
+      const map = {}
+      for (const r of results ?? []) {
+        const name = r.metric?.name
+        if (!name) continue
+        if (!map[name]) {
+          map[name] = r
+        } else {
+          // Sum values for the same container name
+          const prev = parseFloat(map[name].value?.[1] ?? 0)
+          const curr = parseFloat(r.value?.[1] ?? 0)
+          map[name] = { ...r, value: [r.value?.[0], String(prev + curr)] }
+        }
+      }
+      return map
+    }
+
+    const cpuMap     = index(data.cpuRate)
+    const memMap     = index(data.memoryUsage)
+    const memLimMap  = index(data.memoryLimit)
+    const netRxMap   = index(data.networkRx)
+    const netTxMap   = index(data.networkTx)
+    const diskRMap   = index(data.diskRead)
+    const diskWMap   = index(data.diskWrite)
+    const startMap   = index(data.startTime)
+
+    return unique.map((r) => {
+      const name = r.metric?.name ?? 'unknown'
+      const image = r.metric?.image ?? ''
+      const host = r.metric?.instance ?? r.metric?.job ?? ''
+
+      const cpuPercent    = parseVal(cpuMap[name], 1)
+      const memoryBytes   = parseVal(memMap[name], 0)
+      const memoryMB      = Math.round(memoryBytes / 1024 / 1024)
+      const limitBytes    = parseVal(memLimMap[name], 0)
+      const memoryLimit   = limitBytes > 0 ? Math.round(limitBytes / 1024 / 1024) : 0
+      const memoryPercent = memoryLimit > 0 ? parseFloat(((memoryMB / memoryLimit) * 100).toFixed(1)) : 0
+      const networkRxMB   = parseVal(netRxMap[name], 0) / 1024 / 1024
+      const networkTxMB   = parseVal(netTxMap[name], 0) / 1024 / 1024
+      const diskReadMB    = parseVal(diskRMap[name], 0) / 1024 / 1024
+      const diskWriteMB   = parseVal(diskWMap[name], 0) / 1024 / 1024
+      const startSeconds  = parseVal(startMap[name], 0)
+      const uptime        = startSeconds > 0 ? formatUptime(startSeconds) : '—'
+
+      // Derive status: if CPU is being reported it's running, otherwise stopped
+      // Unhealthy heuristic: CPU > 90% or memory > 90%
+      let status = 'stopped'
+      if (cpuMap[name] || memMap[name]) {
+        status = (cpuPercent > 90 || memoryPercent > 90) ? 'unhealthy' : 'running'
+      }
+
+      return {
+        id: name,
+        name,
+        image,
+        status,
+        cpuPercent,
+        memoryMB,
+        memoryPercent,
+        memoryLimit,
+        networkRxMB: parseFloat(networkRxMB.toFixed(1)),
+        networkTxMB: parseFloat(networkTxMB.toFixed(1)),
+        diskReadMB:  parseFloat(diskReadMB.toFixed(1)),
+        diskWriteMB: parseFloat(diskWriteMB.toFixed(1)),
+        uptime,
+        host,
+      }
+    })
+  }, [data])
+
+  // Derived stats
+  const stats = useMemo(() => {
+    const defaults = {
+      total: 0, running: 0, stopped: 0, unhealthy: 0,
+      totalCpu: 0, avgCpu: 0,
+      totalMemoryMB: 0, totalMemoryLimitMB: 0,
+      totalNetworkRxMB: 0, totalNetworkTxMB: 0,
+      totalDiskReadMB: 0, totalDiskWriteMB: 0,
+    }
+    if (containers.length === 0) return defaults
+    const running   = containers.filter((c) => c.status === 'running').length
+    const stopped   = containers.filter((c) => c.status === 'stopped').length
+    const unhealthy = containers.filter((c) => c.status === 'unhealthy').length
+    const totalCpu  = containers.reduce((a, c) => a + c.cpuPercent, 0)
+    const totalMem  = containers.reduce((a, c) => a + c.memoryMB, 0)
+    const totalMemLimit = containers.reduce((a, c) => a + c.memoryLimit, 0)
+    const totalNetRx = containers.reduce((a, c) => a + c.networkRxMB, 0)
+    const totalNetTx = containers.reduce((a, c) => a + c.networkTxMB, 0)
+    const totalDiskR = containers.reduce((a, c) => a + c.diskReadMB, 0)
+    const totalDiskW = containers.reduce((a, c) => a + c.diskWriteMB, 0)
+
+    return {
+      total: containers.length,
+      running,
+      stopped,
+      unhealthy,
+      totalCpu: parseFloat(totalCpu.toFixed(1)),
+      avgCpu: parseFloat((totalCpu / containers.length).toFixed(1)),
+      totalMemoryMB: totalMem,
+      totalMemoryLimitMB: totalMemLimit,
+      totalNetworkRxMB: parseFloat(totalNetRx.toFixed(1)),
+      totalNetworkTxMB: parseFloat(totalNetTx.toFixed(1)),
+      totalDiskReadMB: parseFloat(totalDiskR.toFixed(1)),
+      totalDiskWriteMB: parseFloat(totalDiskW.toFixed(1)),
+    }
+  }, [containers])
+
+  return { containers, stats, error }
+}
+
+function parseVal(result, decimals) {
+  const raw = result?.value?.[1]
+  if (raw === undefined || raw === null) return 0
+  const num = parseFloat(raw)
+  return isNaN(num) ? 0 : parseFloat(num.toFixed(decimals))
+}
+
+function formatUptime(startTimestamp) {
+  const seconds = Math.floor(Date.now() / 1000 - startTimestamp)
+  if (seconds < 0) return '—'
+
+  const days  = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const mins  = Math.floor((seconds % 3600) / 60)
+
+  if (days > 0) return `${days}d ${hours}h ${mins}m`
+  if (hours > 0) return `${hours}h ${mins}m`
+  return `${mins}m`
+}
