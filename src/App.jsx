@@ -1,22 +1,24 @@
 import { useState, useEffect, useMemo } from "react"
-import { Cpu, MemoryStick, Network, Container, HardDrive, Activity } from "lucide-react"
+import { Routes, Route, Navigate } from "react-router"
+import { Cpu, MemoryStick, Network, Container, HardDrive, Activity, Server, Thermometer } from "lucide-react"
 import { useContainers } from "./hooks/useContainers"
+import { useSystem } from "./hooks/useSystem"
 import Sidebar from "./components/Sidebar"
 import Topbar from "./components/Topbar"
 import MetricsCard from "./components/MetricsCard"
 import ContainerTable from "./components/ContainerTable"
-import ChartsPanel from "./components/ChartsPanel"
 import ContainersPage from "./components/ContainersPage"
+import MetricsPage from "./components/MetricsPage"
 
 export default function App() {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [activeView, setActiveView] = useState("dashboard")
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(typeof window !== "undefined" && window.innerWidth < 768)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedContainer, setSelectedContainer] = useState(null)
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [tick, setTick] = useState(0)
 
   const { containers, stats, error } = useContainers(autoRefresh ? 15000 : null)
+  const { hosts } = useSystem(autoRefresh ? 15000 : null)
 
   useEffect(() => {
     if (!autoRefresh) return
@@ -57,76 +59,89 @@ export default function App() {
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        activeView={activeView}
-        onViewChange={setActiveView}
+        autoRefresh={autoRefresh}
+        onAutoRefreshToggle={() => setAutoRefresh(!autoRefresh)}
+        stats={stats}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden relative">
-        <Topbar
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          autoRefresh={autoRefresh}
-          onAutoRefreshToggle={() => setAutoRefresh(!autoRefresh)}
-          stats={stats}
-          containerCount={containers.length}
-        />
+        <div className="relative z-20">
+          <Topbar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            autoRefresh={autoRefresh}
+            onAutoRefreshToggle={() => setAutoRefresh(!autoRefresh)}
+            stats={stats}
+            containers={containers}
+            onMenuToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+          />
+        </div>
 
-        {activeView === "containers" ? (
-          <div className="flex-1 overflow-hidden">
-            <ContainersPage containers={containers} />
-          </div>
-        ) : (
-          <main className="flex-1 overflow-y-auto p-6 space-y-6">
-            {/* Header */}
-            <div className="flex items-center gap-3 mb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-px bg-cyan-500/40" />
+        <Routes>
+          <Route path="/" element={
+            <main className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Header */}
+              <div className="flex items-center gap-3 mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-px bg-cyan-500/40" />
+                  <span
+                    className="text-cyan-400/60"
+                    style={{ fontFamily: "Rajdhani, sans-serif", fontSize: "10px", letterSpacing: "0.3em", textTransform: "uppercase" }}
+                  >
+                    DASHBOARD
+                  </span>
+                  <div className="w-20 h-px bg-cyan-500/20" />
+                </div>
                 <span
-                  className="text-cyan-400/60"
-                  style={{ fontFamily: "Rajdhani, sans-serif", fontSize: "10px", letterSpacing: "0.3em", textTransform: "uppercase" }}
+                  className="ml-auto text-gray-700"
+                  style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "10px" }}
                 >
-                  PRISM//DASHBOARD
+                  PINGS:{tick} // {new Date().toLocaleTimeString()}
                 </span>
-                <div className="w-20 h-px bg-cyan-500/20" />
               </div>
-              <span
-                className="ml-auto text-gray-700"
-                style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "10px" }}
-              >
-                TICK:{tick} // {new Date().toLocaleTimeString()}
-              </span>
+
+              {/* Summary cards */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                <MetricsCard title="Containers" value={stats.total} subtitle={`${stats.running} active`} icon={<Container className="w-4 h-4" />} accentColor="#00f0ff" />
+                {hosts.map((h) => (
+                  <MetricsCard key={`${h.id}-cpu`} title={`${h.os} CPU`} value={`${h.cpuUsage}%`} subtitle={`${h.cpuCores} cores`} icon={<Cpu className="w-4 h-4" />} accentColor={h.id === 'linux' ? '#00f0ff' : '#818cf8'} />
+                ))}
+                {hosts.map((h) => (
+                  <MetricsCard key={`${h.id}-mem`} title={`${h.os} RAM`} value={`${h.memUsedGB} GB`} subtitle={`${h.memPercent}% of ${h.memTotalGB} GB`} icon={<MemoryStick className="w-4 h-4" />} accentColor="#a855f7" />
+                ))}
+                <MetricsCard title="Network I/O" value={`${((stats.totalNetworkRxMB + stats.totalNetworkTxMB) / 1024).toFixed(1)}GB`} subtitle={`↓${(stats.totalNetworkRxMB / 1024).toFixed(1)} ↑${(stats.totalNetworkTxMB / 1024).toFixed(1)}`} icon={<Network className="w-4 h-4" />} accentColor="#22d3ee" />
+              </div>
+
+              {/* Selected container detail */}
+              {selectedContainerData && (
+                <ContainerDetail container={selectedContainerData} />
+              )}
+
+              {/* Container table */}
+              <ContainerTable
+                containers={filteredContainers}
+                selectedId={selectedContainer}
+                onSelect={(id) => setSelectedContainer(selectedContainer === id ? null : id)}
+              />
+            </main>
+          } />
+          <Route path="/containers" element={
+            <div className="flex-1 overflow-hidden">
+              <ContainersPage containers={containers} />
             </div>
-
-            {/* Summary cards */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              <MetricsCard title="Containers" value={stats.total} subtitle={`${stats.running} active`} icon={<Container className="w-4 h-4" />} accentColor="#00f0ff" />
-              <MetricsCard title="Avg CPU" value={`${stats.avgCpu}%`} subtitle="across all containers" icon={<Cpu className="w-4 h-4" />} accentColor="#00f0ff" />
-              <MetricsCard title="Total Memory" value={`${(stats.totalMemoryMB / 1024).toFixed(1)}GB`} subtitle={`of ${(stats.totalMemoryLimitMB / 1024).toFixed(1)}GB allocated`} icon={<MemoryStick className="w-4 h-4" />} accentColor="#a855f7" />
-              <MetricsCard title="Network RX" value={`${(stats.totalNetworkRxMB / 1024).toFixed(1)}GB`} subtitle="total received" icon={<Network className="w-4 h-4" />} accentColor="#22d3ee" />
-              <MetricsCard title="Network TX" value={`${(stats.totalNetworkTxMB / 1024).toFixed(1)}GB`} subtitle="total transmitted" icon={<Activity className="w-4 h-4" />} accentColor="#f97316" />
-              <MetricsCard title="Disk I/O" value={`${(stats.totalDiskReadMB + stats.totalDiskWriteMB).toFixed(0)}MB`} subtitle={`R:${stats.totalDiskReadMB.toFixed(0)} / W:${stats.totalDiskWriteMB.toFixed(0)}MB`} icon={<HardDrive className="w-4 h-4" />} accentColor="#34d399" />
+          } />
+          <Route path="/containers/:containerId" element={
+            <div className="flex-1 overflow-hidden">
+              <ContainersPage containers={containers} />
             </div>
-
-            {/* Charts */}
-            <ChartsPanel
-              key={tick}
-              containerId={selectedContainer}
-              containerName={selectedContainerData?.name ?? "All Containers"}
-            />
-
-            {/* Container table */}
-            <ContainerTable
-              containers={filteredContainers}
-              selectedId={selectedContainer}
-              onSelect={(id) => setSelectedContainer(selectedContainer === id ? null : id)}
-            />
-
-            {/* Selected container detail */}
-            {selectedContainerData && (
-              <ContainerDetail container={selectedContainerData} />
-            )}
-          </main>
-        )}
+          } />
+          <Route path="/metrics" element={
+            <div className="flex-1 overflow-y-auto">
+              <MetricsPage />
+            </div>
+          } />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </div>
     </div>
   )
@@ -152,7 +167,7 @@ function ContainerDetail({ container }) {
           className="uppercase tracking-wider text-gray-300"
           style={{ fontFamily: "Rajdhani, sans-serif", fontSize: "13px" }}
         >
-          {container.name} // Detail
+          {container.name}
         </span>
       </div>
 

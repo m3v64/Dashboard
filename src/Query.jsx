@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
 
-// Instant queries — fetches current values from /api/v1/query
 export function useQueries(queries, interval = 15000) {
     const [data, setData] = useState({})
     const [error, setError] = useState(null)
@@ -36,6 +35,7 @@ export function useQueries(queries, interval = 15000) {
         }
 
         fetchAll()
+        if (!interval) return () => { cancelled = true }
         const id = setInterval(fetchAll, interval)
         return () => { cancelled = true; clearInterval(id) }
     }, [interval])
@@ -43,7 +43,6 @@ export function useQueries(queries, interval = 15000) {
     return { data, error }
 }
 
-// Range queries — fetches time series from /api/v1/query_range
 export function useRangeQuery(query, { start, end, step } = {}) {
     const [data, setData] = useState([])
     const [error, setError] = useState(null)
@@ -79,12 +78,10 @@ export function useRangeQuery(query, { start, end, step } = {}) {
     return { data, error }
 }
 
-// All PromQL queries used by the dashboard
 export const PromQL = {
-    // Instant queries for the container list
     containers:     'container_last_seen{name=~".+"}',
     cpuRate:        'rate(container_cpu_usage_seconds_total{name=~".+"}[1m]) * 100',
-    memoryUsage:    'container_memory_usage_bytes{name=~".+"}',
+    memoryUsage:    'container_memory_working_set_bytes{name=~".+"}',
     memoryLimit:    'container_spec_memory_limit_bytes{name=~".+"}',
     networkRx:      'rate(container_network_receive_bytes_total{name=~".+"}[1m])',
     networkTx:      'rate(container_network_transmit_bytes_total{name=~".+"}[1m])',
@@ -92,24 +89,50 @@ export const PromQL = {
     diskWrite:      'rate(container_fs_writes_bytes_total{name=~".+"}[1m])',
     startTime:      'container_start_time_seconds{name=~".+"}',
 
-    // Range queries for charts (parameterized by container name)
     cpuRange:       (name) => `rate(container_cpu_usage_seconds_total{name="${name}"}[1m]) * 100`,
-    memoryRange:    (name) => `container_memory_usage_bytes{name="${name}"}`,
+    memoryRange:    (name) => `container_memory_working_set_bytes{name="${name}"}`,
     netRxRange:     (name) => `rate(container_network_receive_bytes_total{name="${name}"}[1m])`,
     netTxRange:     (name) => `rate(container_network_transmit_bytes_total{name="${name}"}[1m])`,
     diskReadRange:  (name) => `rate(container_fs_reads_bytes_total{name="${name}"}[1m])`,
     diskWriteRange: (name) => `rate(container_fs_writes_bytes_total{name="${name}"}[1m])`,
 
-    // Aggregate range queries for overview charts (sum across all containers)
     cpuRangeAll:       'sum(rate(container_cpu_usage_seconds_total{name=~".+"}[1m])) * 100',
-    memoryRangeAll:    'sum(container_memory_usage_bytes{name=~".+"})',
+    memoryRangeAll:    'sum(container_memory_working_set_bytes{name=~".+"})',
     netRxRangeAll:     'sum(rate(container_network_receive_bytes_total{name=~".+"}[1m]))',
     netTxRangeAll:     'sum(rate(container_network_transmit_bytes_total{name=~".+"}[1m]))',
     diskReadRangeAll:  'sum(rate(container_fs_reads_bytes_total{name=~".+"}[1m]))',
     diskWriteRangeAll: 'sum(rate(container_fs_writes_bytes_total{name=~".+"}[1m]))',
+
+    nodeMemTotal:       'node_memory_MemTotal_bytes',
+    nodeMemAvailable:   'node_memory_MemAvailable_bytes',
+    nodeLoad1:          'node_load1',
+    nodeLoad5:          'node_load5',
+    nodeLoad15:         'node_load15',
+    nodeCpuCount:       'count(node_cpu_seconds_total{mode="idle"})',
+    nodeCpuUsage:       '(1 - avg(rate(node_cpu_seconds_total{mode="idle"}[1m]))) * 100',
+    nodeFsSize:         'node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs",mountpoint!~"/boot.*"}',
+    nodeFsAvail:        'node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs",mountpoint!~"/boot.*"}',
+    nodeBootTime:       'node_boot_time_seconds',
+    nodeTemp:           'node_thermal_zone_temp{type="cpu-thermal"}',
+    nodeUnameInfo:      'node_uname_info',
+
+    nodeCpuRangeAll:    '(1 - avg(rate(node_cpu_seconds_total{mode="idle"}[1m]))) * 100',
+    nodeMemUsedRange:   'node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes',
+    nodeLoadRange:      'node_load1',
+
+    winMemTotal:        'windows_memory_physical_total_bytes',
+    winMemAvailable:    'windows_memory_available_bytes',
+    winCpuUsage:        '(1 - avg(rate(windows_cpu_time_total{mode="idle"}[1m]))) * 100',
+    winCpuCount:        'count(windows_cpu_time_total{mode="idle"})',
+    winDiskSize:        'windows_logical_disk_size_bytes{volume=~"[A-Z]:"}',
+    winDiskFree:        'windows_logical_disk_free_bytes{volume=~"[A-Z]:"}',
+    winBootTime:        'windows_system_boot_time_timestamp',
+    winOsInfo:          'windows_os_info',
+
+    winCpuRangeAll:     '(1 - avg(rate(windows_cpu_time_total{mode="idle"}[1m]))) * 100',
+    winMemUsedRange:    'windows_memory_physical_total_bytes - windows_memory_available_bytes',
 }
 
-// Transform Prometheus range result into recharts-compatible array
 export function toTimeSeries(results, valueKey = "value", divisor = 1) {
     if (!results?.[0]?.values) return []
     return results[0].values.map(([ts, val]) => ({
@@ -118,7 +141,6 @@ export function toTimeSeries(results, valueKey = "value", divisor = 1) {
     }))
 }
 
-// Merge two range query results into one time series (e.g., rx + tx)
 export function mergeTimeSeries(results1, results2, key1, key2, divisor = 1) {
     const s1 = results1?.[0]?.values ?? []
     const s2 = results2?.[0]?.values ?? []

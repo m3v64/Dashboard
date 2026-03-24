@@ -1,3 +1,4 @@
+import { Link } from "react-router"
 import { ChevronRight } from "lucide-react"
 
 const statusColor = (s) =>
@@ -50,9 +51,8 @@ export default function ContainerTable({ containers, selectedId, onSelect }) {
               <tr
                 key={c.id}
                 onClick={() => onSelect(c.id)}
-                className={`border-b border-white/3 hover:bg-white/2 cursor-pointer transition-all ${
-                  selectedId === c.id ? "bg-cyan-500/5" : ""
-                }`}
+                className={`border-b border-white/3 hover:bg-white/2 cursor-pointer transition-all ${selectedId === c.id ? "bg-cyan-500/5" : ""
+                  }`}
               >
                 <td className="px-4 py-2.5">
                   <span
@@ -60,7 +60,11 @@ export default function ContainerTable({ containers, selectedId, onSelect }) {
                     style={c.status === "unhealthy" ? { boxShadow: "0 0 6px rgba(251,191,36,0.5)" } : {}}
                   />
                 </td>
-                <td className="px-4 py-2.5 text-gray-200">{c.name}</td>
+                <td className="px-4 py-2.5 text-gray-200">
+                  <Link to={`/containers/${encodeURIComponent(c.id)}`} className="hover:text-cyan-400 transition-colors">
+                    {c.name}
+                  </Link>
+                </td>
                 <td className="px-4 py-2.5 text-gray-500">{c.image}</td>
                 <td className={`px-4 py-2.5 text-right ${cpuColor(c.cpuPercent)}`}>{c.cpuPercent}%</td>
                 <td className={`px-4 py-2.5 text-right ${memColor(c.memoryPercent)}`}>{c.memoryMB}MB</td>
@@ -70,11 +74,12 @@ export default function ContainerTable({ containers, selectedId, onSelect }) {
                 <td className="px-4 py-2.5 text-gray-500">{c.host}</td>
                 <td className="px-4 py-2.5 text-gray-500">{c.uptime}</td>
                 <td className="px-4 py-2.5">
-                  <ChevronRight
-                    className={`w-3 h-3 transition-colors ${
-                      selectedId === c.id ? "text-cyan-400" : "text-gray-700"
-                    }`}
-                  />
+                  <Link to={`/containers/${encodeURIComponent(c.id)}`}>
+                    <ChevronRight
+                      className={`w-3 h-3 transition-colors ${selectedId === c.id ? "text-cyan-400" : "text-gray-700"
+                        }`}
+                    />
+                  </Link>
                 </td>
               </tr>
             ))}
