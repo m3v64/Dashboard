@@ -40,8 +40,7 @@ function ChartCard({ title, children }) {
   )
 }
 
-export default function ChartsPanel({ containerId, containerName }) {
-  // Per-container or aggregate range queries
+export default function ChartsPanel({ containerName }) {
   const name = containerName && containerName !== "All Containers" ? containerName : null
   const { data: cpuRaw } = useRangeQuery(name ? PromQL.cpuRange(name) : PromQL.cpuRangeAll)
   const { data: memRaw } = useRangeQuery(name ? PromQL.memoryRange(name) : PromQL.memoryRangeAll)
@@ -63,7 +62,7 @@ export default function ChartsPanel({ containerId, containerName }) {
           className="uppercase tracking-wider text-gray-300"
           style={{ fontFamily: "Rajdhani, sans-serif", fontSize: "13px" }}
         >
-          {containerName || "System"} // Telemetry
+          {containerName || "System"}
         </span>
       </div>
 

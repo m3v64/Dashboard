@@ -46,7 +46,6 @@ export default function App() {
         color: "#e5e7eb",
       }}
     >
-      {/* Grid overlay */}
       <div
         className="fixed inset-0 pointer-events-none opacity-[0.03]"
         style={{
@@ -100,7 +99,6 @@ export default function App() {
                 </span>
               </div>
 
-              {/* Summary cards */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 <MetricsCard title="Containers" value={stats.total} subtitle={`${stats.running} active`} icon={<Container className="w-4 h-4" />} accentColor="#00f0ff" />
                 {hosts.map((h) => (
@@ -112,12 +110,10 @@ export default function App() {
                 <MetricsCard title="Network I/O" value={`${((stats.totalNetworkRxMB + stats.totalNetworkTxMB) / 1024).toFixed(1)}GB`} subtitle={`↓${(stats.totalNetworkRxMB / 1024).toFixed(1)} ↑${(stats.totalNetworkTxMB / 1024).toFixed(1)}`} icon={<Network className="w-4 h-4" />} accentColor="#22d3ee" />
               </div>
 
-              {/* Selected container detail */}
               {selectedContainerData && (
                 <ContainerDetail container={selectedContainerData} />
               )}
 
-              {/* Container table */}
               <ContainerTable
                 containers={filteredContainers}
                 selectedId={selectedContainer}

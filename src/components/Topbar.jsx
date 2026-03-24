@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react"
 import { useNavigate } from "react-router"
 import { Search, RefreshCw, Bell, Menu, X } from "lucide-react"
+import { useRangeQuery, PromQL, toTimeSeries } from "../Query"
 
 function StatusPill({ color, label, value }) {
   const colorMap = {
@@ -17,7 +18,18 @@ function StatusPill({ color, label, value }) {
 }
 
 export default function Topbar({ searchQuery, onSearchChange, autoRefresh, onAutoRefreshToggle, stats = {}, containers = [], onMenuToggle }) {
-  const memPercent = stats.totalMemoryLimitMB ? ((stats.totalMemoryMB / stats.totalMemoryLimitMB) * 100).toFixed(0) : 0
+  const GB = 1024 * 1024 * 1024
+
+  const { data: nodeCpuRangeRaw } = useRangeQuery(PromQL.nodeCpuRangeAll)
+  const { data: nodeMemRangeRaw } = useRangeQuery(PromQL.nodeMemUsedRange)
+  const { data: winCpuRangeRaw } = useRangeQuery(PromQL.winCpuRangeAll)
+  const { data: winMemRangeRaw } = useRangeQuery(PromQL.winMemUsedRange)
+
+  const nodeCpuData = useMemo(() => toTimeSeries(nodeCpuRangeRaw), [nodeCpuRangeRaw])
+  const nodeMemData = useMemo(() => toTimeSeries(nodeMemRangeRaw, "value", GB), [nodeMemRangeRaw])
+  const winCpuData = useMemo(() => toTimeSeries(winCpuRangeRaw), [winCpuRangeRaw])
+  const winMemData = useMemo(() => toTimeSeries(winMemRangeRaw, "value", GB), [winMemRangeRaw])
+
   const navigate = useNavigate()
   const [focused, setFocused] = useState(false)
   const wrapperRef = useRef(null)
@@ -51,14 +63,12 @@ export default function Topbar({ searchQuery, onSearchChange, autoRefresh, onAut
       }}
     >
 
-      {/* Mobile Hamburger Menu */}
       <div className="flex md:hidden">
         <button onClick={onMenuToggle} className="cursor-pointer">
           <Menu className="w-7 h-7" color="#4a5565" />
         </button>
       </div>
 
-      {/* Status summary */}
       <div className="flex items-center gap-6">
         <div className="md:flex hidden items-center gap-4 " style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "11px" }}>
           <StatusPill color="emerald" label="RUNNING" value={stats.running ?? 0} />
@@ -67,16 +77,17 @@ export default function Topbar({ searchQuery, onSearchChange, autoRefresh, onAut
         </div>
         <div className="md:flex hidden h-4 w-px bg-white/10" />
         <div className="flex items-center gap-4" style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "11px" }}>
-          <span className="text-gray-500">
-            CPU <span className="text-cyan-500">{stats.avgCpu ?? 0}%</span>
+          <span className="text-gray-500 flex flex-col">
+            <span><span className="inline text-gray-600">WIN </span>CPU <span className="text-cyan-500">{String(winCpuData[winCpuData?.length - 1]?.value).split('.')[0] ?? 0}%</span></span>
+            <span><span className="inline text-gray-600">RPI </span>CPU <span className="text-cyan-500">{String(nodeCpuData[nodeCpuData?.length - 1]?.value).split('.')[0] ?? 0}%</span></span>
           </span>
-          <span className="text-gray-500">
-            MEM <span className="text-purple-500">{memPercent}%</span>
+          <span className="text-gray-500 flex flex-col">
+            <span><span className="inline text-gray-600">WIN </span>MEM <span className="text-purple-500">{String(winMemData[winMemData?.length - 1]?.value).split('.')[0] ?? 0}%</span></span>
+            <span><span className="inline text-gray-600">RPI </span>MEM <span className="text-purple-500">{String(nodeMemData[nodeMemData?.length - 1]?.value).split('.')[0] ?? 0}%</span></span>
           </span>
         </div>
       </div>
 
-      {/* Controls */}
       <div className="flex items-center gap-3">
         <div className="relative" ref={wrapperRef}>
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-600" />

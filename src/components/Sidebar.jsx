@@ -25,7 +25,6 @@ const navItems = [
 export default function Sidebar({ collapsed, onToggle, autoRefresh, onAutoRefreshToggle, stats = {} }) {
   return (
     <>
-      {/* Mobile backdrop */}
       {!collapsed && (
         <div
           className="fixed inset-0 bg-black/60 z-40 md:hidden"
@@ -132,7 +131,6 @@ export default function Sidebar({ collapsed, onToggle, autoRefresh, onAutoRefres
           })}
         </nav>
 
-        {/* Collapse toggle */}
         <button
           onClick={onToggle}
           className="absolute -right-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-cyan-400 bg-gray-900 border border-cyan-500/20 hover:bg-cyan-500/10 transition-all cursor-pointer z-10"
@@ -158,7 +156,6 @@ export default function Sidebar({ collapsed, onToggle, autoRefresh, onAutoRefres
           )}
         </button>
 
-        {/* Status indicator */}
         <div className={`${collapsed ? "px-1" : "px-3"} py-3 border-t border-white/5`}>
           <div className={`flex items-center gap-2" ${collapsed ? "justify-evenly" : "gap-1"}`}>
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />

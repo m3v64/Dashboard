@@ -143,23 +143,22 @@ export default function ContainersPage({ containers = [] }) {
   const [filterStatus, setFilterStatus] = useState("all")
   const { hosts } = useSystem()
 
-  // Resolve which host a container runs on by checking its instance label
-  // against known host identifiers, with a memory-capacity fallback
+
   const findHost = (container) => {
     if (!container || hosts.length === 0) return null
     const inst = (container.host || "").toLowerCase()
-    // Match by known host-related keywords in the instance label
+
     for (const h of hosts) {
       const name = (h.name || "").toLowerCase()
       if (inst.includes(name) || name.includes(inst.replace(/:\d+$/, ""))) return h
     }
-    // Windows containers typically come from a Windows cAdvisor with 192.168.x.x addresses
+
     const winHost = hosts.find((h) => h.id === "windows")
     const linHost = hosts.find((h) => h.id === "linux")
     if (inst.includes("192.168") && winHost) return winHost
-    // Fallback: if the container uses more memory than the Linux host has, it's on Windows
+
     if (linHost && winHost && container.memoryMB > linHost.memTotalGB * 1024) return winHost
-    // Default to whichever host exists
+
     return linHost || winHost || hosts[0] || null
   }
 
@@ -206,7 +205,6 @@ export default function ContainersPage({ containers = [] }) {
 
   return (
     <div className="flex h-full gap-0 overflow-hidden">
-      {/* Left panel — container list */}
       <div
         className="w-full md:w-[320px] shrink-0 flex flex-col h-full md:border-r overflow-hidden"
         style={{ borderColor: "rgba(255,255,255,0.05)", background: "rgba(8,10,16,0.5)" }}
@@ -278,7 +276,6 @@ export default function ContainersPage({ containers = [] }) {
                   {c.image}
                 </div>
 
-                {/* Mini resource bars */}
                 <div className="space-y-1.5">
                   {(() => {
                     const cHost = findHost(c)
@@ -321,7 +318,6 @@ export default function ContainersPage({ containers = [] }) {
         </div>
       </div>
 
-      {/* Mobile backdrop */}
       {showDetail && (
         <div
           className="fixed inset-0 bg-black/60 z-40 md:hidden"
@@ -329,7 +325,6 @@ export default function ContainersPage({ containers = [] }) {
         />
       )}
 
-      {/* Right panel — container detail */}
       <div
         className={`
           fixed inset-0 z-50 overflow-y-auto p-6 transition-transform duration-300
@@ -340,7 +335,6 @@ export default function ContainersPage({ containers = [] }) {
       >
         {selected ? (
           <div className="space-y-5">
-            {/* Header */}
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center gap-3 mb-2">
@@ -380,7 +374,6 @@ export default function ContainersPage({ containers = [] }) {
               <MiniStat label="Disk I/O" value={`R:${selected.diskReadMB}MB W:${selected.diskWriteMB}MB`} icon={HardDrive} color="#34d399" />
             </div>
 
-            {/* Host context */}
             {(() => {
               const containerHost = findHost(selected)
               if (!containerHost) return null
@@ -421,7 +414,6 @@ export default function ContainersPage({ containers = [] }) {
               )
             })()}
 
-            {/* Utilization bars */}
             <div
               className="rounded-lg p-4 space-y-3"
               style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}
@@ -450,7 +442,6 @@ export default function ContainersPage({ containers = [] }) {
               <DetailChart title="Disk I/O (MB/s)" data={diskData} dataKeys={["read", "write"]} colors={["#34d399", "#fb7185"]} gradientIds={["detailReadGrad", "detailWriteGrad"]} type="line" />
             </div>
 
-            {/* Details table */}
             <div
               className="rounded-lg overflow-hidden"
               style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}

@@ -176,15 +176,6 @@ export default function MetricsPage() {
     [containers],
   )
 
-  const networkPerContainer = useMemo(
-    () => [...containers].sort((a, b) => (b.networkRxMB + b.networkTxMB) - (a.networkRxMB + a.networkTxMB)).slice(0, 8).map((c) => ({
-      name: c.name.length > 16 ? c.name.slice(0, 16) + "…" : c.name,
-      rx: parseFloat(c.networkRxMB.toFixed(2)),
-      tx: parseFloat(c.networkTxMB.toFixed(2)),
-    })),
-    [containers],
-  )
-
   const diskPie = useMemo(() => {
     const items = []
     for (const h of hosts) {
@@ -204,7 +195,6 @@ export default function MetricsPage() {
 
   return (
     <main className="flex-1 overflow-y-auto p-6 space-y-6">
-      {/* Page header */}
       <div className="flex items-center gap-3 mb-2">
         <div className="flex items-center gap-2">
           <div className="w-8 h-px bg-cyan-500/40" />
@@ -378,7 +368,7 @@ export default function MetricsPage() {
         ))}
       </div>
 
-      {/* Disk usage pie */}
+      {/* Disk usage pie chart */}
       {diskPie.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <ChartCard title="Storage — Used vs Free (GB)">
