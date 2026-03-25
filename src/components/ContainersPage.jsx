@@ -362,11 +362,9 @@ export default function ContainersPage({ containers = [] }) {
                 const selHost = findHost(selected)
                 return (<>
                   <UtilizationBar label={`CPU (${selected.cpuPercent}% of ${selHost?.cpuCores ?? '?'} host cores)`} percent={selected.cpuPercent} color="#00f0ff" />
-                  <UtilizationBar label={`MEMORY (${selected.memoryMB}MB / ${selected.memoryLimit}MB limit)`} percent={selected.memoryPercent} color="#a855f7" />
                   {selHost && (
                     <UtilizationBar label={`MEMORY vs HOST (${selected.memoryMB}MB / ${(selHost.memTotalGB * 1024).toFixed(0)}MB total)`} percent={parseFloat(((selected.memoryMB / (selHost.memTotalGB * 1024)) * 100).toFixed(1))} color="#818cf8" />
                   )}
-                  <UtilizationBar label="DISK I/O" percent={Math.min(((selected.diskReadMB + selected.diskWriteMB) / 300 * 100), 100).toFixed(1)} color="#34d399" />
                 </>)
               })()}
             </div>

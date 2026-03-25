@@ -20,7 +20,7 @@ const legendStyle = { fontSize: "10px", fontFamily: "Share Tech Mono", color: "#
 
 function TimeSelect({ value, onChange }) {
   return (
-    <div className="flex gap-1 overflow-x-auto scrollbar-none">
+    <div className="flex gap-1 overflow-x-hidden scrollbar-none">
       {TIME_RANGES.map((r) => (
         <button
           key={r.label}

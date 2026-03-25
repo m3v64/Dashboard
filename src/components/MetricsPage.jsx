@@ -180,10 +180,6 @@ export default function MetricsPage() {
           divisor={GB}
           yDomain={[0, windowsHost?.memTotalGB ?? "auto"]}
         />
-        <RangeChartCard
-          title="Linux Host — Load Average (1m)"
-          series={[{ query: PromQL.nodeLoadRange, dataKey: "load", name: "Load", color: "#f97316", gradientId: "nLoadG" }]}
-        />
       </div>
 
       <SectionHeading label="Storage // Disk Usage" />

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react"
 import { useContainers } from "../hooks/useContainers"
 import { useSystem } from "../hooks/useSystem"
+import { useNotifications } from "../hooks/useNotifications"
 
 const FAVORITES_KEY = "dashboard_favorites"
 const loadFavorites = () => {
@@ -45,6 +46,8 @@ export function DashboardProvider({ children }) {
 
   const isFavorite = useCallback((id) => favorites.includes(id), [favorites])
 
+  const notifications = useNotifications(containers, hosts)
+
   return (
     <DashboardContext.Provider
       value={{
@@ -56,6 +59,7 @@ export function DashboardProvider({ children }) {
         favorites,
         toggleFavorite,
         isFavorite,
+        notifications,
         error: containerError || systemError,
       }}
     >

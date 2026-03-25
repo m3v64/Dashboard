@@ -10,9 +10,10 @@ import {
   Network,
   HardDrive,
   Bell,
+  BellOff,
   RefreshCw
 } from "lucide-react"
-import { REFRESH_OPTIONS } from "../context/DashboardContext"
+import { REFRESH_OPTIONS, useDashboard } from "../context/DashboardContext"
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard", disabled: false },
@@ -27,6 +28,7 @@ const navItems = [
 export default function Sidebar({ collapsed, onToggle, refreshInterval, onIntervalChange, stats = {} }) {
   const autoRefresh = refreshInterval !== null
   const [refreshOpen, setRefreshOpen] = useState(false)
+  const { notifications } = useDashboard()
   return (
     <>
       {!collapsed && (
@@ -137,7 +139,7 @@ export default function Sidebar({ collapsed, onToggle, refreshInterval, onInterv
 
         <button
           onClick={onToggle}
-          className="absolute -right-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-cyan-400 bg-gray-900 border border-cyan-500/20 hover:bg-cyan-500/10 transition-all cursor-pointer z-10"
+          className="absolute -right-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full hidden md:flex items-center justify-center text-cyan-400 bg-gray-900 border border-cyan-500/20 hover:bg-cyan-500/10 transition-all cursor-pointer z-10"
         >
           {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
         </button>
@@ -185,9 +187,17 @@ export default function Sidebar({ collapsed, onToggle, refreshInterval, onInterv
           )}
         </div>
 
-        <button className="md:hidden flex relative p-2 text-gray-600 hover:text-gray-400 transition-colors cursor-pointer ml-2 mb-2 w-8 h-8 items-center justify-center">
-          <Bell className="w-4 h-4" />
-          {(stats.unhealthy ?? 0) > 0 && (
+        <button
+          onClick={notifications.toggle}
+          className={`md:hidden flex relative p-2 transition-all cursor-pointer ml-2 mb-2 w-8 h-8 items-center justify-center rounded ${
+            notifications.enabled
+              ? "bg-cyan-500/10 text-cyan-500"
+              : "text-gray-600 hover:text-gray-400"
+          }`}
+          title={notifications.enabled ? "Desktop notifications ON" : "Desktop notifications OFF"}
+        >
+          {notifications.enabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+          {notifications.enabled && (stats.unhealthy ?? 0) > 0 && (
             <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
           )}
         </button>

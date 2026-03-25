@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react"
 import { useNavigate } from "react-router"
-import { Search, RefreshCw, Bell, Menu, X } from "lucide-react"
-import { REFRESH_OPTIONS } from "../context/DashboardContext"
+import { Search, RefreshCw, Bell, BellOff, Menu, X } from "lucide-react"
+import { REFRESH_OPTIONS, useDashboard } from "../context/DashboardContext"
 
 function StatusPill({ color, label, value }) {
   const colorMap = {
@@ -18,6 +18,7 @@ function StatusPill({ color, label, value }) {
 }
 
 export default function Topbar({ searchQuery, onSearchChange, refreshInterval, onIntervalChange, stats = {}, containers = [], hosts = [], onMenuToggle }) {
+  const { notifications } = useDashboard()
   const linuxHost = hosts.find(h => h.id === 'linux')
   const windowsHost = hosts.find(h => h.id === 'windows')
   const autoRefresh = refreshInterval !== null
@@ -204,9 +205,17 @@ export default function Topbar({ searchQuery, onSearchChange, refreshInterval, o
           )}
         </div>
 
-        <button className="md:flex hidden relative p-2 text-gray-600 hover:text-gray-400 transition-colors cursor-pointer">
-          <Bell className="w-4 h-4" />
-          {(stats.unhealthy ?? 0) > 0 && (
+        <button
+          onClick={notifications.toggle}
+          className={`md:flex hidden relative p-2 rounded transition-all cursor-pointer ${
+            notifications.enabled
+              ? "bg-cyan-500/10 text-cyan-500"
+              : "text-gray-600 hover:text-gray-400"
+          }`}
+          title={notifications.enabled ? "Desktop notifications ON" : "Desktop notifications OFF"}
+        >
+          {notifications.enabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+          {notifications.enabled && (stats.unhealthy ?? 0) > 0 && (
             <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
           )}
         </button>
