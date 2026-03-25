@@ -85,7 +85,7 @@ function AppShell() {
                   className="ml-auto text-gray-700"
                   style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "10px" }}
                 >
-                  PINGS // {new Date().toLocaleTimeString()}
+                  {new Date().toLocaleTimeString()}
                 </span>
               </div>
 

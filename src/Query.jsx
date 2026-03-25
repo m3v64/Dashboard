@@ -1,5 +1,79 @@
 import { useEffect, useState, useRef } from 'react'
 
+const TS_PREFIX   = 'dash_ts_'
+const MAX_POINTS  = 5000
+const MAX_AGE_S   = 90 * 86400
+
+function tsKey(query) {
+  let h = 0x811c9dc5
+  for (let i = 0; i < query.length; i++) {
+    h ^= query.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return TS_PREFIX + (h >>> 0).toString(36)
+}
+
+function loadCache(query) {
+  try {
+    const raw = localStorage.getItem(tsKey(query))
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function saveCache(query, series) {
+  try {
+    localStorage.setItem(tsKey(query), JSON.stringify(series))
+  } catch { /* silently skip */ }
+}
+
+function mergeSeries(cached, fresh) {
+  if (!cached || cached.length === 0) return fresh
+  if (!fresh  || fresh.length  === 0) return cached
+
+  const mkey     = (m) => JSON.stringify(m ?? {})
+  const cacheMap = new Map(cached.map(s => [mkey(s.metric), s]))
+
+  const merged = fresh.map(fs => {
+    const key = mkey(fs.metric)
+    const cs  = cacheMap.get(key)
+    cacheMap.delete(key)
+
+    if (!cs) return fs
+
+    const byTs = new Map()
+    for (const pt of cs.values ?? []) byTs.set(pt[0], pt)
+    for (const pt of fs.values ?? []) byTs.set(pt[0], pt)
+
+    const cutoff = Math.floor(Date.now() / 1000) - MAX_AGE_S
+    const values = [...byTs.values()]
+      .filter(p => p[0] >= cutoff)
+      .sort((a, b) => a[0] - b[0])
+      .slice(-MAX_POINTS)
+
+    return { ...fs, values }
+  })
+
+  for (const [, cs] of cacheMap) {
+    const cutoff = Math.floor(Date.now() / 1000) - MAX_AGE_S
+    const values = (cs.values ?? [])
+      .filter(p => p[0] >= cutoff)
+      .sort((a, b) => a[0] - b[0])
+      .slice(-MAX_POINTS)
+    if (values.length > 0) merged.push({ ...cs, values })
+  }
+
+  return merged
+}
+
+export function clearTimeSeriesCache() {
+  const keys = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i)
+    if (k?.startsWith(TS_PREFIX)) keys.push(k)
+  }
+  keys.forEach(k => localStorage.removeItem(k))
+}
+
 export function useQueries(queries, interval = 15000) {
     const [data, setData] = useState({})
     const [error, setError] = useState(null)
@@ -52,22 +126,49 @@ export function useRangeQuery(query, { start, end, step } = {}) {
         let cancelled = false
 
         async function fetchRange() {
+            const now = Math.floor(Date.now() / 1000)
+            const s = start ?? now - 3600
+            const e = end   ?? now
+
             try {
-                const now = Math.floor(Date.now() / 1000)
                 const params = new URLSearchParams({
                     query,
-                    start: String(start ?? now - 3600),
-                    end: String(end ?? now),
-                    step: String(step ?? 60),
+                    start: String(s),
+                    end:   String(e),
+                    step:  String(step ?? 60),
                 })
-                const res = await fetch(`/api/v1/query_range?${params}`)
+                const res  = await fetch(`/api/v1/query_range?${params}`)
                 const json = await res.json()
+
                 if (!cancelled) {
-                    setData(json.data?.result ?? [])
+                    const fresh  = json.data?.result ?? []
+                    const cached = loadCache(query)
+                    const merged = mergeSeries(cached, fresh)
+
+                    saveCache(query, merged)
+
+                    // filter to requested window for display
+                    const display = merged.map(series => ({
+                        ...series,
+                        values: (series.values ?? []).filter(([ts]) => ts >= s && ts <= e),
+                    }))
+
+                    setData(display)
                     setError(null)
                 }
             } catch (err) {
-                if (!cancelled) setError(err)
+                if (!cancelled) {
+                    // fall back to cached data when Prometheus is unreachable
+                    const cached = loadCache(query)
+                    if (cached) {
+                        const display = cached.map(series => ({
+                            ...series,
+                            values: (series.values ?? []).filter(([ts]) => ts >= s && ts <= e),
+                        }))
+                        setData(display)
+                    }
+                    setError(err)
+                }
             }
         }
 
@@ -85,23 +186,23 @@ export const PromQL = {
     memoryLimit:    'container_spec_memory_limit_bytes{name=~".+"}',
     networkRx:      'rate(container_network_receive_bytes_total{name=~".+"}[1m])',
     networkTx:      'rate(container_network_transmit_bytes_total{name=~".+"}[1m])',
-    diskRead:       'rate(container_fs_reads_bytes_total{name=~".+"}[1m])',
-    diskWrite:      'rate(container_fs_writes_bytes_total{name=~".+"}[1m])',
+    diskRead:       'rate(container_blkio_device_usage_total{name=~".+", operation="Read"}[1m])',
+    diskWrite:      'rate(container_blkio_device_usage_total{name=~".+", operation="Write"}[1m])',
     startTime:      'container_start_time_seconds{name=~".+"}',
 
     cpuRange:       (name) => `rate(container_cpu_usage_seconds_total{name="${name}"}[1m]) * 100`,
     memoryRange:    (name) => `container_memory_working_set_bytes{name="${name}"}`,
     netRxRange:     (name) => `rate(container_network_receive_bytes_total{name="${name}"}[1m])`,
     netTxRange:     (name) => `rate(container_network_transmit_bytes_total{name="${name}"}[1m])`,
-    diskReadRange:  (name) => `rate(container_fs_reads_bytes_total{name="${name}"}[1m])`,
-    diskWriteRange: (name) => `rate(container_fs_writes_bytes_total{name="${name}"}[1m])`,
+    diskReadRange:  (name) => `sum(rate(container_blkio_device_usage_total{name="${name}", operation="Read"}[1m]))`,
+    diskWriteRange: (name) => `sum(rate(container_blkio_device_usage_total{name="${name}", operation="Write"}[1m]))`,
 
     cpuRangeAll:       'sum(rate(container_cpu_usage_seconds_total{name=~".+"}[1m])) * 100',
     memoryRangeAll:    'sum(container_memory_working_set_bytes{name=~".+"})',
     netRxRangeAll:     'sum(rate(container_network_receive_bytes_total{name=~".+"}[1m]))',
     netTxRangeAll:     'sum(rate(container_network_transmit_bytes_total{name=~".+"}[1m]))',
-    diskReadRangeAll:  'sum(rate(container_fs_reads_bytes_total{name=~".+"}[1m]))',
-    diskWriteRangeAll: 'sum(rate(container_fs_writes_bytes_total{name=~".+"}[1m]))',
+    diskReadRangeAll:  'sum(rate(container_blkio_device_usage_total{name=~".+", operation="Read"}[1m]))',
+    diskWriteRangeAll: 'sum(rate(container_blkio_device_usage_total{name=~".+", operation="Write"}[1m]))',
 
     nodeMemTotal:       'node_memory_MemTotal_bytes',
     nodeMemAvailable:   'node_memory_MemAvailable_bytes',
