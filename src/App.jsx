@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useMemo } from "react"
 import { Routes, Route, Navigate } from "react-router"
 import { Cpu, MemoryStick, Network, Container, HardDrive, Activity, Server, Thermometer } from "lucide-react"
-import { useContainers } from "./hooks/useContainers"
-import { useSystem } from "./hooks/useSystem"
+import { DashboardProvider, useDashboard } from "./context/DashboardContext"
+import { fmtMB } from "./Query"
 import Sidebar from "./components/Sidebar"
 import Topbar from "./components/Topbar"
 import MetricsCard from "./components/MetricsCard"
@@ -11,30 +11,19 @@ import ContainersPage from "./components/ContainersPage"
 import MetricsPage from "./components/MetricsPage"
 
 export default function App() {
+  return (
+    <DashboardProvider>
+      <AppShell />
+    </DashboardProvider>
+  )
+}
+
+function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(typeof window !== "undefined" && window.innerWidth < 768)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedContainer, setSelectedContainer] = useState(null)
-  const [autoRefresh, setAutoRefresh] = useState(true)
-  const [tick, setTick] = useState(0)
 
-  const { containers, stats, error } = useContainers(autoRefresh ? 15000 : null)
-  const { hosts } = useSystem(autoRefresh ? 15000 : null)
-
-  useEffect(() => {
-    if (!autoRefresh) return
-    const id = setInterval(() => setTick((t) => t + 1), 15000)
-    return () => clearInterval(id)
-  }, [autoRefresh])
-
-  const filteredContainers = useMemo(
-    () => containers.filter(
-      (c) =>
-        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.image.toLowerCase().includes(searchQuery.toLowerCase())
-    ),
-    [containers, searchQuery]
-  )
-
+  const { containers, stats, hosts, refreshInterval, setRefreshInterval, error } = useDashboard()
   const selectedContainerData = containers.find((c) => c.id === selectedContainer)
 
   return (
@@ -58,8 +47,8 @@ export default function App() {
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        autoRefresh={autoRefresh}
-        onAutoRefreshToggle={() => setAutoRefresh(!autoRefresh)}
+        refreshInterval={refreshInterval}
+        onIntervalChange={setRefreshInterval}
         stats={stats}
       />
 
@@ -68,10 +57,11 @@ export default function App() {
           <Topbar
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
-            autoRefresh={autoRefresh}
-            onAutoRefreshToggle={() => setAutoRefresh(!autoRefresh)}
+            refreshInterval={refreshInterval}
+            onIntervalChange={setRefreshInterval}
             stats={stats}
             containers={containers}
+            hosts={hosts}
             onMenuToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
           />
         </div>
@@ -95,7 +85,7 @@ export default function App() {
                   className="ml-auto text-gray-700"
                   style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "10px" }}
                 >
-                  PINGS:{tick} // {new Date().toLocaleTimeString()}
+                  PINGS // {new Date().toLocaleTimeString()}
                 </span>
               </div>
 
@@ -107,7 +97,7 @@ export default function App() {
                 {hosts.map((h) => (
                   <MetricsCard key={`${h.id}-mem`} title={`${h.os} RAM`} value={`${h.memUsedGB} GB`} subtitle={`${h.memPercent}% of ${h.memTotalGB} GB`} icon={<MemoryStick className="w-4 h-4" />} accentColor="#a855f7" />
                 ))}
-                <MetricsCard title="Network I/O" value={`${((stats.totalNetworkRxMB + stats.totalNetworkTxMB) / 1024).toFixed(1)}GB`} subtitle={`↓${(stats.totalNetworkRxMB / 1024).toFixed(1)} ↑${(stats.totalNetworkTxMB / 1024).toFixed(1)}`} icon={<Network className="w-4 h-4" />} accentColor="#22d3ee" />
+                <MetricsCard title="Network I/O" value={`${fmtMB(stats.totalNetworkRxMB + stats.totalNetworkTxMB)} MB/s`} subtitle={`↓${fmtMB(stats.totalNetworkRxMB)} ↑${fmtMB(stats.totalNetworkTxMB)}`} icon={<Network className="w-4 h-4" />} accentColor="#22d3ee" />
               </div>
 
               {selectedContainerData && (
@@ -115,7 +105,7 @@ export default function App() {
               )}
 
               <ContainerTable
-                containers={filteredContainers}
+                containers={containers}
                 selectedId={selectedContainer}
                 onSelect={(id) => setSelectedContainer(selectedContainer === id ? null : id)}
               />
@@ -179,7 +169,7 @@ function ContainerDetail({ container }) {
         />
         <DetailItem label="CPU" value={`${container.cpuPercent}%`} />
         <DetailItem label="MEMORY" value={`${container.memoryMB}MB / ${container.memoryLimit}MB`} />
-        <DetailItem label="DISK R/W" value={`${container.diskReadMB}MB / ${container.diskWriteMB}MB`} />
+        <DetailItem label="DISK R/W" value={`${fmtMB(container.diskReadMB)} / ${fmtMB(container.diskWriteMB)} MB/s`} />
         <DetailItem label="HOST" value={container.host} />
         <DetailItem label="UPTIME" value={container.uptime} />
       </div>

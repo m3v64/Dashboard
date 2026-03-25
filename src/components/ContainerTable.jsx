@@ -1,5 +1,8 @@
+import { useMemo } from "react"
 import { Link } from "react-router"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, Star } from "lucide-react"
+import { useDashboard } from "../context/DashboardContext"
+import { fmtMB } from "../Query"
 
 const statusColor = (s) =>
   s === "running" ? "bg-emerald-400" : s === "unhealthy" ? "bg-amber-400" : "bg-red-400"
@@ -11,6 +14,13 @@ const memColor = (v) =>
   v > 80 ? "text-red-400" : v > 50 ? "text-amber-400" : "text-purple-500"
 
 export default function ContainerTable({ containers, selectedId, onSelect }) {
+  const { toggleFavorite, isFavorite } = useDashboard()
+
+  const sorted = useMemo(() =>
+    [...containers].sort((a, b) => isFavorite(b.id) - isFavorite(a.id)),
+    [containers, isFavorite]
+  )
+
   return (
     <div
       className="rounded-lg overflow-hidden"
@@ -35,6 +45,7 @@ export default function ContainerTable({ containers, selectedId, onSelect }) {
         <table className="w-full" style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "12px" }}>
           <thead>
             <tr className="border-b text-gray-600 border-white/5">
+              <th className="px-4 py-2 font-normal w-8"></th>
               <th className="text-left px-4 py-2 font-normal">STATUS</th>
               <th className="text-left px-4 py-2 font-normal">NAME</th>
               <th className="text-left px-4 py-2 font-normal">IMAGE</th>
@@ -47,13 +58,25 @@ export default function ContainerTable({ containers, selectedId, onSelect }) {
             </tr>
           </thead>
           <tbody>
-            {containers.map((c) => (
+            {sorted.map((c) => (
               <tr
                 key={c.id}
                 onClick={() => onSelect(c.id)}
                 className={`border-b border-white/3 hover:bg-white/2 cursor-pointer transition-all ${selectedId === c.id ? "bg-cyan-500/5" : ""
                   }`}
               >
+                <td className="px-4 py-2.5">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleFavorite(c.id) }}
+                    className="cursor-pointer hover:scale-110 transition-transform"
+                  >
+                    <Star
+                      className="w-3.5 h-3.5 transition-colors"
+                      fill={isFavorite(c.id) ? "#facc15" : "none"}
+                      stroke={isFavorite(c.id) ? "#facc15" : "#4b5563"}
+                    />
+                  </button>
+                </td>
                 <td className="px-4 py-2.5">
                   <span
                     className={`inline-block w-2 h-2 rounded-full ${statusColor(c.status)}`}
@@ -69,7 +92,7 @@ export default function ContainerTable({ containers, selectedId, onSelect }) {
                 <td className={`px-4 py-2.5 text-right ${cpuColor(c.cpuPercent)}`}>{c.cpuPercent}%</td>
                 <td className={`px-4 py-2.5 text-right ${memColor(c.memoryPercent)}`}>{c.memoryMB}MB</td>
                 <td className="px-4 py-2.5 text-right text-gray-400">
-                  ↓{c.networkRxMB.toFixed(0)} ↑{c.networkTxMB.toFixed(0)}
+                  ↓{fmtMB(c.networkRxMB)} ↑{fmtMB(c.networkTxMB)}
                 </td>
                 <td className="px-4 py-2.5 text-gray-500">{c.host}</td>
                 <td className="px-4 py-2.5 text-gray-500">{c.uptime}</td>

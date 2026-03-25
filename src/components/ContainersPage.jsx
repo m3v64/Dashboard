@@ -2,26 +2,11 @@ import { useState, useMemo } from "react"
 import { useParams, useNavigate } from "react-router"
 import {
   Search, Cpu, MemoryStick, HardDrive, Network, Server,
-  ChevronRight, AlertTriangle, CheckCircle, XCircle, X,
+  ChevronRight, AlertTriangle, CheckCircle, XCircle, X, Star,
 } from "lucide-react"
-import { useSystem } from "../hooks/useSystem"
-import {
-  AreaChart, Area, LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
-} from "recharts"
-import { useRangeQuery, PromQL, toTimeSeries, mergeTimeSeries } from "../Query"
-
-const gridStroke = "rgba(255,255,255,0.03)"
-const tickFill = "#555"
-const tooltipStyle = {
-  backgroundColor: "rgba(10,12,18,0.95)",
-  border: "1px solid rgba(0,240,255,0.15)",
-  borderRadius: "4px",
-  fontFamily: "Share Tech Mono, monospace",
-  fontSize: "11px",
-  color: "#e5e7eb",
-}
+import { useDashboard } from "../context/DashboardContext"
+import { PromQL, fmtMB } from "../Query"
+import RangeChartCard from "./RangeChartCard"
 
 function StatusBadge({ status }) {
   const config = {
@@ -42,7 +27,7 @@ function StatusBadge({ status }) {
   )
 }
 
-function MiniStat({ label, value, icon: Icon, color }) {
+function MiniStat({ label, value, icon: Icon, color, small }) {
   return (
     <div
       className="rounded-lg p-3 flex items-center gap-3"
@@ -55,7 +40,7 @@ function MiniStat({ label, value, icon: Icon, color }) {
         <div className="text-gray-500 uppercase tracking-wider" style={{ fontFamily: "Rajdhani, sans-serif", fontSize: "10px" }}>
           {label}
         </div>
-        <div className="text-white" style={{ fontFamily: "Rajdhani, sans-serif", fontSize: "20px", fontWeight: 600, lineHeight: 1.2 }}>
+        <div className="text-white" style={{ fontFamily: "Rajdhani, sans-serif", fontSize: small ? "14px" : "20px", fontWeight: 600, lineHeight: 1.2 }}>
           {value}
         </div>
       </div>
@@ -86,54 +71,6 @@ function UtilizationBar({ label, percent, color }) {
   )
 }
 
-function DetailChart({ title, data, dataKeys, colors, gradientIds, type = "area" }) {
-  return (
-    <div
-      className="rounded-lg p-4"
-      style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}
-    >
-      <div className="uppercase tracking-wider mb-3 text-gray-400" style={{ fontFamily: "Rajdhani, sans-serif", fontSize: "11px" }}>
-        {title}
-      </div>
-      <div style={{ minWidth: 200, height: 160 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          {type === "area" ? (
-            <AreaChart data={data}>
-              <defs>
-                {dataKeys.map((key, i) => (
-                  <linearGradient key={gradientIds[i]} id={gradientIds[i]} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={colors[i]} stopOpacity={0.25} />
-                    <stop offset="100%" stopColor={colors[i]} stopOpacity={0} />
-                  </linearGradient>
-                ))}
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
-              <XAxis dataKey="time" tick={{ fontSize: 9, fill: tickFill }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 9, fill: tickFill }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tooltipStyle} />
-              {dataKeys.length > 1 && <Legend wrapperStyle={{ fontSize: "10px", fontFamily: "Share Tech Mono", color: "#666" }} />}
-              {dataKeys.map((key, i) => (
-                <Area key={key} type="monotone" dataKey={key} name={key.toUpperCase()} stroke={colors[i]} strokeWidth={1.5} fill={`url(#${gradientIds[i]})`} dot={false} />
-              ))}
-            </AreaChart>
-          ) : (
-            <LineChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
-              <XAxis dataKey="time" tick={{ fontSize: 9, fill: tickFill }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 9, fill: tickFill }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Legend wrapperStyle={{ fontSize: "10px", fontFamily: "Share Tech Mono", color: "#666" }} />
-              {dataKeys.map((key, i) => (
-                <Line key={key} type="monotone" dataKey={key} name={key.toUpperCase()} stroke={colors[i]} strokeWidth={1.5} dot={false} />
-              ))}
-            </LineChart>
-          )}
-        </ResponsiveContainer>
-      </div>
-    </div>
-  )
-}
-
 const MB = 1024 * 1024
 
 export default function ContainersPage({ containers = [] }) {
@@ -141,7 +78,7 @@ export default function ContainersPage({ containers = [] }) {
   const navigate = useNavigate()
   const [search, setSearch] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
-  const { hosts } = useSystem()
+  const { hosts, toggleFavorite, isFavorite } = useDashboard()
 
 
   const findHost = (container) => {
@@ -167,25 +104,13 @@ export default function ContainersPage({ containers = [] }) {
       const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) || c.image.toLowerCase().includes(search.toLowerCase())
       const matchesStatus = filterStatus === "all" || c.status === filterStatus
       return matchesSearch && matchesStatus
-    }),
-    [containers, search, filterStatus]
+    }).sort((a, b) => isFavorite(b.id) - isFavorite(a.id)),
+    [containers, search, filterStatus, isFavorite]
   )
 
   const effectiveId = containerId ?? containers[0]?.id ?? null
   const selected = containers.find((c) => c.id === effectiveId)
   const selectedName = selected?.name
-
-  const { data: cpuRaw } = useRangeQuery(selectedName ? PromQL.cpuRange(selectedName) : null)
-  const { data: memRaw } = useRangeQuery(selectedName ? PromQL.memoryRange(selectedName) : null)
-  const { data: rxRaw } = useRangeQuery(selectedName ? PromQL.netRxRange(selectedName) : null)
-  const { data: txRaw } = useRangeQuery(selectedName ? PromQL.netTxRange(selectedName) : null)
-  const { data: diskReadRaw } = useRangeQuery(selectedName ? PromQL.diskReadRange(selectedName) : null)
-  const { data: diskWriteRaw } = useRangeQuery(selectedName ? PromQL.diskWriteRange(selectedName) : null)
-
-  const cpuData = useMemo(() => toTimeSeries(cpuRaw), [cpuRaw])
-  const memData = useMemo(() => toTimeSeries(memRaw, "value", MB), [memRaw])
-  const netData = useMemo(() => mergeTimeSeries(rxRaw, txRaw, "rx", "tx", MB), [rxRaw, txRaw])
-  const diskData = useMemo(() => mergeTimeSeries(diskReadRaw, diskWriteRaw, "read", "write", MB), [diskReadRaw, diskWriteRaw])
 
   const statusCounts = useMemo(() => ({
     all: containers.length,
@@ -234,8 +159,8 @@ export default function ContainersPage({ containers = [] }) {
                 key={f.key}
                 onClick={() => setFilterStatus(f.key)}
                 className={`px-2 py-1 rounded transition-all cursor-pointer ${filterStatus === f.key
-                    ? "bg-cyan-500/10 text-cyan-400"
-                    : "text-gray-600 hover:text-gray-400"
+                  ? "bg-cyan-500/10 text-cyan-400"
+                  : "text-gray-600 hover:text-gray-400"
                   }`}
                 style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "10px" }}
               >
@@ -255,8 +180,8 @@ export default function ContainersPage({ containers = [] }) {
                 key={c.id}
                 onClick={() => navigate(`/containers/${encodeURIComponent(c.id)}`)}
                 className={`w-full text-left rounded-lg p-3 mb-1 transition-all cursor-pointer ${isSelected
-                    ? "bg-cyan-500/8 border border-cyan-500/20"
-                    : "hover:bg-white/2 border border-transparent"
+                  ? "bg-cyan-500/8 border border-cyan-500/20"
+                  : "hover:bg-white/2 border border-transparent"
                   }`}
               >
                 <div className="flex items-center justify-between mb-1.5">
@@ -269,7 +194,19 @@ export default function ContainersPage({ containers = [] }) {
                       {c.name}
                     </span>
                   </div>
-                  <ChevronRight className={`w-3 h-3 transition-colors ${isSelected ? "text-cyan-400" : "text-gray-700"}`} />
+                  <div className="flex items-center gap-1">
+                    <span
+                      onClick={(e) => { e.stopPropagation(); toggleFavorite(c.id) }}
+                      className="cursor-pointer hover:scale-110 transition-transform p-0.5"
+                    >
+                      <Star
+                        className="w-3 h-3 transition-colors"
+                        fill={isFavorite(c.id) ? "#facc15" : "none"}
+                        stroke={isFavorite(c.id) ? "#facc15" : "#4b5563"}
+                      />
+                    </span>
+                    <ChevronRight className={`w-3 h-3 transition-colors ${isSelected ? "text-cyan-400" : "text-gray-700"}`} />
+                  </div>
                 </div>
 
                 <div className="text-gray-600 mb-2" style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "10px" }}>
@@ -369,9 +306,9 @@ export default function ContainersPage({ containers = [] }) {
             {/* Stat cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <MiniStat label="CPU Usage" value={`${selected.cpuPercent}%`} icon={Cpu} color="#00f0ff" />
-              <MiniStat label="Memory" value={`${selected.memoryMB}MB / ${selected.memoryLimit}MB`} icon={MemoryStick} color="#a855f7" />
-              <MiniStat label="Network I/O" value={`↓${selected.networkRxMB.toFixed(0)} ↑${selected.networkTxMB.toFixed(0)}`} icon={Network} color="#22d3ee" />
-              <MiniStat label="Disk I/O" value={`R:${selected.diskReadMB}MB W:${selected.diskWriteMB}MB`} icon={HardDrive} color="#34d399" />
+              <MiniStat label="Memory" value={`${selected.memoryMB}MB`} icon={MemoryStick} color="#a855f7" />
+              <MiniStat label="Network I/O" value={`↓${fmtMB(selected.networkRxMB)} ↑${fmtMB(selected.networkTxMB)} MB/s`} icon={Network} color="#22d3ee" small />
+              <MiniStat label="Disk I/O" value={`↓${fmtMB(selected.diskReadMB)} ↑${fmtMB(selected.diskWriteMB)} MB/s`} icon={HardDrive} color="#34d399" small />
             </div>
 
             {(() => {
@@ -436,10 +373,40 @@ export default function ContainersPage({ containers = [] }) {
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <DetailChart title="CPU Usage Over Time (%)" data={cpuData} dataKeys={["value"]} colors={["#00f0ff"]} gradientIds={["detailCpuGrad"]} />
-              <DetailChart title="Memory Usage Over Time (MB)" data={memData} dataKeys={["value"]} colors={["#a855f7"]} gradientIds={["detailMemGrad"]} />
-              <DetailChart title="Network Traffic (MB/s)" data={netData} dataKeys={["rx", "tx"]} colors={["#22d3ee", "#f97316"]} gradientIds={["detailRxGrad", "detailTxGrad"]} />
-              <DetailChart title="Disk I/O (MB/s)" data={diskData} dataKeys={["read", "write"]} colors={["#34d399", "#fb7185"]} gradientIds={["detailReadGrad", "detailWriteGrad"]} type="line" />
+              <RangeChartCard
+                title="CPU Usage Over Time (%)"
+                series={[{ query: selectedName ? PromQL.cpuRange(selectedName) : null, dataKey: "value", name: "CPU %", color: "#00f0ff", gradientId: "detailCpuGrad" }]}
+                height={160}
+                compact
+              />
+              <RangeChartCard
+                title="Memory Usage Over Time (MB)"
+                series={[{ query: selectedName ? PromQL.memoryRange(selectedName) : null, dataKey: "value", name: "Memory MB", color: "#a855f7", gradientId: "detailMemGrad" }]}
+                divisor={MB}
+                height={160}
+                compact
+              />
+              <RangeChartCard
+                title="Network Traffic (MB/s)"
+                series={[
+                  { query: selectedName ? PromQL.netRxRange(selectedName) : null, dataKey: "rx", name: "RX", color: "#22d3ee", gradientId: "detailRxGrad" },
+                  { query: selectedName ? PromQL.netTxRange(selectedName) : null, dataKey: "tx", name: "TX", color: "#f97316", gradientId: "detailTxGrad" },
+                ]}
+                divisor={MB}
+                height={160}
+                compact
+              />
+              <RangeChartCard
+                title="Disk I/O (MB/s)"
+                type="line"
+                series={[
+                  { query: selectedName ? PromQL.diskReadRange(selectedName) : null, dataKey: "read", name: "READ", color: "#34d399", gradientId: "detailReadGrad" },
+                  { query: selectedName ? PromQL.diskWriteRange(selectedName) : null, dataKey: "write", name: "WRITE", color: "#fb7185", gradientId: "detailWriteGrad" },
+                ]}
+                divisor={MB}
+                height={160}
+                compact
+              />
             </div>
 
             <div
@@ -464,10 +431,10 @@ export default function ContainersPage({ containers = [] }) {
                       ["CPU Usage", `${selected.cpuPercent}%${tblHost ? ` (host: ${tblHost.cpuUsage}% of ${tblHost.cpuCores} cores)` : ''}`],
                       ["Memory (Container)", `${selected.memoryMB}MB / ${selected.memoryLimit}MB (${selected.memoryPercent}%)`],
                       ["Memory (Host)", tblHost ? `${tblHost.memUsedGB}GB / ${tblHost.memTotalGB}GB (${tblHost.memPercent}%)` : 'N/A'],
-                      ["Network RX", `${selected.networkRxMB} MB`],
-                      ["Network TX", `${selected.networkTxMB} MB`],
-                      ["Disk Read", `${selected.diskReadMB} MB`],
-                      ["Disk Write", `${selected.diskWriteMB} MB`],
+                      ["Network RX", `${fmtMB(selected.networkRxMB)} MB/s`],
+                      ["Network TX", `${fmtMB(selected.networkTxMB)} MB/s`],
+                      ["Disk Read", `${fmtMB(selected.diskReadMB)} MB/s`],
+                      ["Disk Write", `${fmtMB(selected.diskWriteMB)} MB/s`],
                       ["Uptime", selected.uptime],
                       ...(tblHost ? [["Host Uptime", tblHost.uptime], ["Host OS", tblHost.os]] : []),
                     ]

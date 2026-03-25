@@ -1,34 +1,43 @@
 import { useMemo } from 'react'
-import { useQueries, PromQL } from '../Query'
+import { useQueries, PromQL, formatUptime } from '../Query'
 
 const GB = 1024 * 1024 * 1024
 
-export function useSystem(interval = 15000) {
-  const queries = useMemo(() => ({
+export function useSystem(interval = 30000) {
+  // Dynamic metrics — polled on interval
+  const dynamicQueries = useMemo(() => ({
     nodeMemTotal:     PromQL.nodeMemTotal,
     nodeMemAvailable: PromQL.nodeMemAvailable,
     nodeCpuUsage:     PromQL.nodeCpuUsage,
-    nodeCpuCount:     PromQL.nodeCpuCount,
     nodeLoad1:        PromQL.nodeLoad1,
     nodeLoad5:        PromQL.nodeLoad5,
     nodeLoad15:       PromQL.nodeLoad15,
     nodeFsSize:       PromQL.nodeFsSize,
     nodeFsAvail:      PromQL.nodeFsAvail,
-    nodeBootTime:     PromQL.nodeBootTime,
     nodeTemp:         PromQL.nodeTemp,
-    nodeUnameInfo:    PromQL.nodeUnameInfo,
 
     winMemTotal:      PromQL.winMemTotal,
     winMemAvailable:  PromQL.winMemAvailable,
     winCpuUsage:      PromQL.winCpuUsage,
-    winCpuCount:      PromQL.winCpuCount,
     winDiskSize:      PromQL.winDiskSize,
     winDiskFree:      PromQL.winDiskFree,
+  }), [])
+
+  // Static info — fetched once (boot time, OS info, CPU count)
+  const staticQueries = useMemo(() => ({
+    nodeCpuCount:     PromQL.nodeCpuCount,
+    nodeBootTime:     PromQL.nodeBootTime,
+    nodeUnameInfo:    PromQL.nodeUnameInfo,
+    winCpuCount:      PromQL.winCpuCount,
     winBootTime:      PromQL.winBootTime,
     winOsInfo:        PromQL.winOsInfo,
   }), [])
 
-  const { data, error } = useQueries(queries, interval)
+  const { data: dynamicData, error: dynError } = useQueries(dynamicQueries, interval)
+  const { data: staticData, error: statError } = useQueries(staticQueries, null)
+
+  const data = useMemo(() => ({ ...staticData, ...dynamicData }), [staticData, dynamicData])
+  const error = dynError || statError
 
   const hosts = useMemo(() => {
     const result = []
@@ -131,14 +140,4 @@ function val1(results) {
   return parseFloat(v.toFixed(1))
 }
 
-function formatUptime(bootTimestamp) {
-  if (!bootTimestamp) return '—'
-  const seconds = Math.floor(Date.now() / 1000 - bootTimestamp)
-  if (seconds < 0) return '—'
-  const days = Math.floor(seconds / 86400)
-  const hours = Math.floor((seconds % 86400) / 3600)
-  const mins = Math.floor((seconds % 3600) / 60)
-  if (days > 0) return `${days}d ${hours}h ${mins}m`
-  if (hours > 0) return `${hours}h ${mins}m`
-  return `${mins}m`
-}
+

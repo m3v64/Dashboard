@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { NavLink, Link } from "react-router"
 import {
   LayoutDashboard,
@@ -11,6 +12,7 @@ import {
   Bell,
   RefreshCw
 } from "lucide-react"
+import { REFRESH_OPTIONS } from "../context/DashboardContext"
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard", disabled: false },
@@ -22,7 +24,9 @@ const navItems = [
   { to: "/settings", icon: Settings, label: "Settings", disabled: true },
 ]
 
-export default function Sidebar({ collapsed, onToggle, autoRefresh, onAutoRefreshToggle, stats = {} }) {
+export default function Sidebar({ collapsed, onToggle, refreshInterval, onIntervalChange, stats = {} }) {
+  const autoRefresh = refreshInterval !== null
+  const [refreshOpen, setRefreshOpen] = useState(false)
   return (
     <>
       {!collapsed && (
@@ -138,16 +142,48 @@ export default function Sidebar({ collapsed, onToggle, autoRefresh, onAutoRefres
           {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
         </button>
 
-        <button
-          onClick={onAutoRefreshToggle}
-          className={`md:hidden flex p-2 rounded transition-all cursor-pointer m-2 w-8 h-8 items-center justify-center ${autoRefresh ? "bg-cyan-500/10 text-cyan-500" : "text-gray-600 hover:text-gray-400"}`}
-          title={autoRefresh ? "Auto-refresh ON" : "Auto-refresh OFF"}
-        >
-          <RefreshCw
-            className={`w-4 h-4 ${autoRefresh ? "animate-spin" : ""}`}
-            style={autoRefresh ? { animationDuration: "3s" } : {}}
-          />
-        </button>
+        <div className="relative md:hidden m-2">
+          <button
+            onClick={() => setRefreshOpen(!refreshOpen)}
+            className={`flex items-center gap-1.5 p-2 rounded transition-all cursor-pointer w-8 h-8 justify-center ${autoRefresh ? "bg-cyan-500/10 text-cyan-500" : "text-gray-600 hover:text-gray-400"}`}
+            title={autoRefresh ? `Refresh every ${refreshInterval / 1000}s` : "Auto-refresh OFF"}
+          >
+            <RefreshCw
+              className={`w-4 h-4 ${autoRefresh ? "animate-spin" : ""}`}
+              style={autoRefresh ? { animationDuration: "3s" } : {}}
+            />
+          </button>
+
+          {refreshOpen && (
+            <div
+              className="absolute left-0 bottom-full mb-1 w-32 rounded-lg border border-white/8 z-50 shadow-xl overflow-hidden"
+              style={{
+                background: "linear-gradient(135deg, rgba(12,14,22,0.98) 0%, rgba(8,10,16,0.98) 100%)",
+                backdropFilter: "blur(16px)",
+              }}
+            >
+              <div className="px-3 py-1.5 border-b border-white/5">
+                <span className="text-gray-500" style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "10px" }}>
+                  REFRESH RATE
+                </span>
+              </div>
+              {REFRESH_OPTIONS.map((opt) => (
+                <button
+                  key={opt.label}
+                  onClick={() => { onIntervalChange(opt.value); setRefreshOpen(false) }}
+                  className={`w-full text-left px-3 py-2 transition-colors cursor-pointer border-b border-white/3 last:border-b-0 ${
+                    refreshInterval === opt.value
+                      ? "bg-cyan-500/10 text-cyan-400"
+                      : "text-gray-400 hover:bg-white/5 hover:text-gray-200"
+                  }`}
+                  style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "11px" }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <button className="md:hidden flex relative p-2 text-gray-600 hover:text-gray-400 transition-colors cursor-pointer ml-2 mb-2 w-8 h-8 items-center justify-center">
           <Bell className="w-4 h-4" />

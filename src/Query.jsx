@@ -133,6 +133,38 @@ export const PromQL = {
     winMemUsedRange:    'windows_memory_physical_total_bytes - windows_memory_available_bytes',
 }
 
+export function fmtMB(v) {
+    const n = Number(v)
+    if (n >= 10) return Math.round(n).toString()
+    if (n < 0.01) return "0"
+    return n.toFixed(2)
+}
+
+export const TIME_RANGES = [
+    { label: "15m", seconds: 900,      step: 15   },
+    { label: "1h",  seconds: 3600,     step: 60   },
+    // { label: "3h",  seconds: 10800,    step: 120  },
+    { label: "6h",  seconds: 21600,    step: 240  },
+    { label: "12h", seconds: 43200,    step: 300  },
+    { label: "1d",  seconds: 86400,    step: 300  },
+    // { label: "3d",  seconds: 259200,   step: 900  },
+    { label: "7d",  seconds: 604800,   step: 1800 },
+    // { label: "30d", seconds: 2592000,  step: 7200 },
+    { label: "All", seconds: 7776000,  step: 21600},
+]
+
+export function formatUptime(timestamp) {
+    if (!timestamp) return '—'
+    const seconds = Math.floor(Date.now() / 1000 - timestamp)
+    if (seconds < 0) return '—'
+    const days = Math.floor(seconds / 86400)
+    const hours = Math.floor((seconds % 86400) / 3600)
+    const mins = Math.floor((seconds % 3600) / 60)
+    if (days > 0) return `${days}d ${hours}h ${mins}m`
+    if (hours > 0) return `${hours}h ${mins}m`
+    return `${mins}m`
+}
+
 export function toTimeSeries(results, valueKey = "value", divisor = 1) {
     if (!results?.[0]?.values) return []
     return results[0].values.map(([ts, val]) => ({

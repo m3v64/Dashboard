@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react"
 import { useNavigate } from "react-router"
 import { Search, RefreshCw, Bell, Menu, X } from "lucide-react"
-import { useRangeQuery, PromQL, toTimeSeries } from "../Query"
+import { REFRESH_OPTIONS } from "../context/DashboardContext"
 
 function StatusPill({ color, label, value }) {
   const colorMap = {
@@ -17,22 +17,16 @@ function StatusPill({ color, label, value }) {
   )
 }
 
-export default function Topbar({ searchQuery, onSearchChange, autoRefresh, onAutoRefreshToggle, stats = {}, containers = [], onMenuToggle }) {
-  const GB = 1024 * 1024 * 1024
-
-  const { data: nodeCpuRangeRaw } = useRangeQuery(PromQL.nodeCpuRangeAll)
-  const { data: nodeMemRangeRaw } = useRangeQuery(PromQL.nodeMemUsedRange)
-  const { data: winCpuRangeRaw } = useRangeQuery(PromQL.winCpuRangeAll)
-  const { data: winMemRangeRaw } = useRangeQuery(PromQL.winMemUsedRange)
-
-  const nodeCpuData = useMemo(() => toTimeSeries(nodeCpuRangeRaw), [nodeCpuRangeRaw])
-  const nodeMemData = useMemo(() => toTimeSeries(nodeMemRangeRaw, "value", GB), [nodeMemRangeRaw])
-  const winCpuData = useMemo(() => toTimeSeries(winCpuRangeRaw), [winCpuRangeRaw])
-  const winMemData = useMemo(() => toTimeSeries(winMemRangeRaw, "value", GB), [winMemRangeRaw])
+export default function Topbar({ searchQuery, onSearchChange, refreshInterval, onIntervalChange, stats = {}, containers = [], hosts = [], onMenuToggle }) {
+  const linuxHost = hosts.find(h => h.id === 'linux')
+  const windowsHost = hosts.find(h => h.id === 'windows')
+  const autoRefresh = refreshInterval !== null
 
   const navigate = useNavigate()
   const [focused, setFocused] = useState(false)
+  const [refreshOpen, setRefreshOpen] = useState(false)
   const wrapperRef = useRef(null)
+  const refreshRef = useRef(null)
 
   const results = useMemo(() => {
     if (!searchQuery.trim()) return []
@@ -48,6 +42,9 @@ export default function Topbar({ searchQuery, onSearchChange, autoRefresh, onAut
     function handleClick(e) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
         setFocused(false)
+      }
+      if (refreshRef.current && !refreshRef.current.contains(e.target)) {
+        setRefreshOpen(false)
       }
     }
     document.addEventListener("mousedown", handleClick)
@@ -76,14 +73,14 @@ export default function Topbar({ searchQuery, onSearchChange, autoRefresh, onAut
           <StatusPill color="amber" label="UNHEALTHY" value={stats.unhealthy ?? 0} />
         </div>
         <div className="md:flex hidden h-4 w-px bg-white/10" />
-        <div className="flex items-center gap-4" style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "11px" }}>
+        <div className="flex items-center gap-2" style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "11px" }}>
           <span className="text-gray-500 flex flex-col">
-            <span><span className="inline text-gray-600">WIN </span>CPU <span className="text-cyan-500">{String(winCpuData[winCpuData?.length - 1]?.value).split('.')[0] ?? 0}%</span></span>
-            <span><span className="inline text-gray-600">RPI </span>CPU <span className="text-cyan-500">{String(nodeCpuData[nodeCpuData?.length - 1]?.value).split('.')[0] ?? 0}%</span></span>
+            <span><span className="inline text-gray-600">WIN </span>CPU <span className="text-cyan-500">{Math.round(windowsHost?.cpuUsage ?? 0)}%</span></span>
+            <span><span className="inline text-gray-600">RPI </span>CPU <span className="text-cyan-500">{Math.round(linuxHost?.cpuUsage ?? 0)}%</span></span>
           </span>
           <span className="text-gray-500 flex flex-col">
-            <span><span className="inline text-gray-600">WIN </span>MEM <span className="text-purple-500">{String(winMemData[winMemData?.length - 1]?.value).split('.')[0] ?? 0}%</span></span>
-            <span><span className="inline text-gray-600">RPI </span>MEM <span className="text-purple-500">{String(nodeMemData[nodeMemData?.length - 1]?.value).split('.')[0] ?? 0}%</span></span>
+            <span><span className="inline text-gray-600">WIN </span>MEM <span className="text-purple-500">{windowsHost?.memPercent ?? 0}%</span></span>
+            <span><span className="inline text-gray-600">RPI </span>MEM <span className="text-purple-500">{linuxHost?.memPercent ?? 0}%</span></span>
           </span>
         </div>
       </div>
@@ -159,17 +156,53 @@ export default function Topbar({ searchQuery, onSearchChange, autoRefresh, onAut
           )}
         </div>
 
-        <button
-          onClick={onAutoRefreshToggle}
-          className={`md:flex hidden p-2 rounded transition-all cursor-pointer ${autoRefresh ? "bg-cyan-500/10 text-cyan-500" : "text-gray-600 hover:text-gray-400"
-            }`}
-          title={autoRefresh ? "Auto-refresh ON" : "Auto-refresh OFF"}
-        >
-          <RefreshCw
-            className={`w-4 h-4 ${autoRefresh ? "animate-spin" : ""}`}
-            style={autoRefresh ? { animationDuration: "3s" } : {}}
-          />
-        </button>
+        <div className="relative md:flex hidden" ref={refreshRef}>
+          <button
+            onClick={() => setRefreshOpen(!refreshOpen)}
+            className={`flex items-center gap-1.5 p-2 rounded transition-all cursor-pointer ${autoRefresh ? "bg-cyan-500/10 text-cyan-500" : "text-gray-600 hover:text-gray-400"}`}
+            title={autoRefresh ? `Refresh every ${refreshInterval / 1000}s` : "Auto-refresh OFF"}
+          >
+            <RefreshCw
+              className={`w-4 h-4 ${autoRefresh ? "animate-spin" : ""}`}
+              style={autoRefresh ? { animationDuration: "3s" } : {}}
+            />
+            {autoRefresh && (
+              <span style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "10px" }}>
+                {refreshInterval / 1000}s
+              </span>
+            )}
+          </button>
+
+          {refreshOpen && (
+            <div
+              className="absolute right-0 top-full mt-1 w-32 rounded-lg border border-white/8 z-50 shadow-xl overflow-hidden"
+              style={{
+                background: "linear-gradient(135deg, rgba(12,14,22,0.98) 0%, rgba(8,10,16,0.98) 100%)",
+                backdropFilter: "blur(16px)",
+              }}
+            >
+              <div className="px-3 py-1.5 border-b border-white/5">
+                <span className="text-gray-500" style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "10px" }}>
+                  REFRESH RATE
+                </span>
+              </div>
+              {REFRESH_OPTIONS.map((opt) => (
+                <button
+                  key={opt.label}
+                  onClick={() => { onIntervalChange(opt.value); setRefreshOpen(false) }}
+                  className={`w-full text-left px-3 py-2 transition-colors cursor-pointer border-b border-white/3 last:border-b-0 ${
+                    refreshInterval === opt.value
+                      ? "bg-cyan-500/10 text-cyan-400"
+                      : "text-gray-400 hover:bg-white/5 hover:text-gray-200"
+                  }`}
+                  style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "11px" }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <button className="md:flex hidden relative p-2 text-gray-600 hover:text-gray-400 transition-colors cursor-pointer">
           <Bell className="w-4 h-4" />

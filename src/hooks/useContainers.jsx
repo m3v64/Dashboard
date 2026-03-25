@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
-import { useQueries, PromQL } from '../Query'
+import { useQueries, PromQL, formatUptime } from '../Query'
 
-export function useContainers(interval = 15000) {
+export function useContainers(interval = 30000) {
   const queries = useMemo(() => ({
     containers: PromQL.containers,
     cpuRate: PromQL.cpuRate,
@@ -67,7 +67,7 @@ export function useContainers(interval = 15000) {
       const diskReadMB = parseVal(diskRMap[id], 0) / 1024 / 1024
       const diskWriteMB = parseVal(diskWMap[id], 0) / 1024 / 1024
       const startSeconds = parseVal(startMap[id], 0)
-      const uptime = startSeconds > 0 ? formatUptime(startSeconds) : '—'
+      const uptime = formatUptime(startSeconds)
 
       let status = 'stopped'
       if (cpuMap[id] || memMap[id]) {
@@ -83,10 +83,10 @@ export function useContainers(interval = 15000) {
         memoryMB,
         memoryPercent,
         memoryLimit,
-        networkRxMB: parseFloat(networkRxMB.toFixed(1)),
-        networkTxMB: parseFloat(networkTxMB.toFixed(1)),
-        diskReadMB: parseFloat(diskReadMB.toFixed(1)),
-        diskWriteMB: parseFloat(diskWriteMB.toFixed(1)),
+        networkRxMB: parseFloat(networkRxMB.toFixed(4)),
+        networkTxMB: parseFloat(networkTxMB.toFixed(4)),
+        diskReadMB: parseFloat(diskReadMB.toFixed(4)),
+        diskWriteMB: parseFloat(diskWriteMB.toFixed(4)),
         uptime,
         host,
       }
@@ -122,10 +122,10 @@ export function useContainers(interval = 15000) {
       avgCpu: parseFloat((totalCpu / containers.length).toFixed(1)),
       totalMemoryMB: totalMem,
       totalMemoryLimitMB: totalMemLimit,
-      totalNetworkRxMB: parseFloat(totalNetRx.toFixed(1)),
-      totalNetworkTxMB: parseFloat(totalNetTx.toFixed(1)),
-      totalDiskReadMB: parseFloat(totalDiskR.toFixed(1)),
-      totalDiskWriteMB: parseFloat(totalDiskW.toFixed(1)),
+      totalNetworkRxMB: parseFloat(totalNetRx.toFixed(3)),
+      totalNetworkTxMB: parseFloat(totalNetTx.toFixed(3)),
+      totalDiskReadMB: parseFloat(totalDiskR.toFixed(3)),
+      totalDiskWriteMB: parseFloat(totalDiskW.toFixed(3)),
     }
   }, [containers])
 
@@ -139,15 +139,4 @@ function parseVal(result, decimals) {
   return isNaN(num) ? 0 : parseFloat(num.toFixed(decimals))
 }
 
-function formatUptime(startTimestamp) {
-  const seconds = Math.floor(Date.now() / 1000 - startTimestamp)
-  if (seconds < 0) return '—'
 
-  const days = Math.floor(seconds / 86400)
-  const hours = Math.floor((seconds % 86400) / 3600)
-  const mins = Math.floor((seconds % 3600) / 60)
-
-  if (days > 0) return `${days}d ${hours}h ${mins}m`
-  if (hours > 0) return `${hours}h ${mins}m`
-  return `${mins}m`
-}

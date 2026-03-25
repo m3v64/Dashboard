@@ -1,6 +1,5 @@
 import { useMemo } from "react"
 import {
-  AreaChart, Area, LineChart, Line,
   PieChart, Pie, Cell,
   BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -11,9 +10,10 @@ import {
   AlertTriangle, CheckCircle,
   XCircle, Server, Thermometer, Monitor,
 } from "lucide-react"
-import { useContainers } from "../hooks/useContainers"
-import { useSystem } from "../hooks/useSystem"
-import { useRangeQuery, PromQL, toTimeSeries, mergeTimeSeries } from "../Query"
+import { useDashboard } from "../context/DashboardContext"
+import { PromQL } from "../Query"
+import MetricsCard from "./MetricsCard"
+import RangeChartCard from "./RangeChartCard"
 
 const MB = 1024 * 1024
 const GB = 1024 * 1024 * 1024
@@ -31,44 +31,6 @@ const tooltipStyle = {
 const legendStyle = { fontSize: "10px", fontFamily: "Share Tech Mono", color: "#666" }
 const PIE_COLORS = ["#00f0ff", "#a855f7", "#f97316", "#34d399", "#f87171", "#fbbf24", "#22d3ee", "#818cf8"]
 const STATUS_COLORS = { running: "#34d399", unhealthy: "#fbbf24", stopped: "#f87171" }
-
-function StatCard({ title, value, subtitle, icon, accentColor }) {
-  return (
-    <div
-      className="relative overflow-hidden rounded-lg p-4 group transition-all duration-300 hover:scale-[1.02]"
-      style={{
-        background: "linear-gradient(135deg, rgba(15,18,28,0.95) 0%, rgba(10,12,20,0.9) 100%)",
-        border: `1px solid ${accentColor}15`,
-        boxShadow: `0 0 20px ${accentColor}08`,
-      }}
-    >
-      <div
-        className="absolute top-0 right-0 w-16 h-16 opacity-20 group-hover:opacity-40 transition-opacity"
-        style={{ background: `radial-gradient(circle at top right, ${accentColor}40, transparent 70%)` }}
-      />
-      <div
-        className="absolute top-0 left-0 h-px w-12 group-hover:w-full transition-all duration-500"
-        style={{ background: `linear-gradient(90deg, ${accentColor}, transparent)` }}
-      />
-      <div className="flex items-start justify-between mb-3">
-        <div className="p-2 rounded" style={{ background: `${accentColor}15` }}>
-          <div style={{ color: accentColor }}>{icon}</div>
-        </div>
-      </div>
-      <div className="uppercase tracking-wider mb-1 text-gray-500" style={{ fontFamily: "Rajdhani, sans-serif", fontSize: "11px" }}>
-        {title}
-      </div>
-      <div className="text-white" style={{ fontFamily: "Rajdhani, sans-serif", fontSize: "28px", fontWeight: 600, lineHeight: 1.1 }}>
-        {value}
-      </div>
-      {subtitle && (
-        <div className="mt-1 text-gray-600" style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "10px" }}>
-          {subtitle}
-        </div>
-      )}
-    </div>
-  )
-}
 
 function ChartCard({ title, children, className = "" }) {
   return (
@@ -127,32 +89,7 @@ function PieTooltip({ active, payload }) {
 }
 
 export default function MetricsPage() {
-  const { containers, stats } = useContainers()
-  const { hosts } = useSystem()
-
-  const { data: cpuRaw } = useRangeQuery(PromQL.cpuRangeAll)
-  const { data: memRaw } = useRangeQuery(PromQL.memoryRangeAll)
-  const { data: rxRaw } = useRangeQuery(PromQL.netRxRangeAll)
-  const { data: txRaw } = useRangeQuery(PromQL.netTxRangeAll)
-  const { data: diskReadRaw } = useRangeQuery(PromQL.diskReadRangeAll)
-  const { data: diskWriteRaw } = useRangeQuery(PromQL.diskWriteRangeAll)
-
-  const { data: nodeCpuRangeRaw } = useRangeQuery(PromQL.nodeCpuRangeAll)
-  const { data: nodeMemRangeRaw } = useRangeQuery(PromQL.nodeMemUsedRange)
-  const { data: nodeLoadRangeRaw } = useRangeQuery(PromQL.nodeLoadRange)
-  const { data: winCpuRangeRaw } = useRangeQuery(PromQL.winCpuRangeAll)
-  const { data: winMemRangeRaw } = useRangeQuery(PromQL.winMemUsedRange)
-
-  const cpuData = useMemo(() => toTimeSeries(cpuRaw), [cpuRaw])
-  const memData = useMemo(() => toTimeSeries(memRaw, "value", MB), [memRaw])
-  const netData = useMemo(() => mergeTimeSeries(rxRaw, txRaw, "rx", "tx", MB), [rxRaw, txRaw])
-  const diskData = useMemo(() => mergeTimeSeries(diskReadRaw, diskWriteRaw, "read", "write", MB), [diskReadRaw, diskWriteRaw])
-
-  const nodeCpuData = useMemo(() => toTimeSeries(nodeCpuRangeRaw), [nodeCpuRangeRaw])
-  const nodeMemData = useMemo(() => toTimeSeries(nodeMemRangeRaw, "value", GB), [nodeMemRangeRaw])
-  const nodeLoadData = useMemo(() => toTimeSeries(nodeLoadRangeRaw, "load"), [nodeLoadRangeRaw])
-  const winCpuData = useMemo(() => toTimeSeries(winCpuRangeRaw), [winCpuRangeRaw])
-  const winMemData = useMemo(() => toTimeSeries(winMemRangeRaw, "value", GB), [winMemRangeRaw])
+  const { containers, stats, hosts } = useDashboard()
 
   const statusPie = useMemo(() => [
     { name: "Running", value: stats.running, color: STATUS_COLORS.running },
@@ -180,6 +117,8 @@ export default function MetricsPage() {
     const items = []
     for (const h of hosts) {
       for (const fs of h.filesystems) {
+        if (String(fs.mountpoint).includes("mnt")) continue;
+
         items.push({
           name: `${h.id === 'linux' ? 'Linux' : 'Windows'} ${fs.mountpoint}`,
           used: fs.usedGB,
@@ -216,123 +155,35 @@ export default function MetricsPage() {
         ))}
       </div>
 
-      <SectionHeading label="Host Telemetry // Time Series (1h)" />
+      <SectionHeading label="Host Telemetry // Time Series" />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Linux CPU */}
-        {nodeCpuData.length > 0 && (
-          <ChartCard title="Linux Host — CPU Usage (%)">
-            <div style={{ height: 200 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={nodeCpuData}>
-                  <defs>
-                    <linearGradient id="nCpuG" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#00f0ff" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#00f0ff" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
-                  <XAxis dataKey="time" tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} domain={[0, 100]} />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Area type="monotone" dataKey="value" name="CPU %" stroke="#00f0ff" strokeWidth={1.5} fill="url(#nCpuG)" dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </ChartCard>
-        )}
-
-        {/* Windows CPU */}
-        {winCpuData.length > 0 && (
-          <ChartCard title="Windows Host — CPU Usage (%)">
-            <div style={{ height: 200 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={winCpuData}>
-                  <defs>
-                    <linearGradient id="wCpuG" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#22d3ee" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
-                  <XAxis dataKey="time" tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} domain={[0, 100]} />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Area type="monotone" dataKey="value" name="CPU %" stroke="#22d3ee" strokeWidth={1.5} fill="url(#wCpuG)" dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </ChartCard>
-        )}
-
-        {/* Linux Memory */}
-        {nodeMemData.length > 0 && (
-          <ChartCard title="Linux Host — Memory Used (GB)">
-            <div style={{ height: 200 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={nodeMemData}>
-                  <defs>
-                    <linearGradient id="nMemG" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#a855f7" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#a855f7" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
-                  <XAxis dataKey="time" tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} domain={[0, linuxHost?.memTotalGB ?? 'auto']} />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Area type="monotone" dataKey="value" name="Used GB" stroke="#a855f7" strokeWidth={1.5} fill="url(#nMemG)" dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </ChartCard>
-        )}
-
-        {/* Windows Memory */}
-        {winMemData.length > 0 && (
-          <ChartCard title="Windows Host — Memory Used (GB)">
-            <div style={{ height: 200 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={winMemData}>
-                  <defs>
-                    <linearGradient id="wMemG" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#818cf8" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#818cf8" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
-                  <XAxis dataKey="time" tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} domain={[0, windowsHost?.memTotalGB ?? 'auto']} />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Area type="monotone" dataKey="value" name="Used GB" stroke="#818cf8" strokeWidth={1.5} fill="url(#wMemG)" dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </ChartCard>
-        )}
-
-        {/* Linux Load Average */}
-        {nodeLoadData.length > 0 && (
-          <ChartCard title="Linux Host — Load Average (1m)">
-            <div style={{ height: 200 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={nodeLoadData}>
-                  <defs>
-                    <linearGradient id="nLoadG" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#f97316" stopOpacity={0.25} />
-                      <stop offset="100%" stopColor="#f97316" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
-                  <XAxis dataKey="time" tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Area type="monotone" dataKey="load" name="Load" stroke="#f97316" strokeWidth={1.5} fill="url(#nLoadG)" dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </ChartCard>
-        )}
+        <RangeChartCard
+          title="Linux Host — CPU Usage (%)"
+          series={[{ query: PromQL.nodeCpuRangeAll, dataKey: "value", name: "CPU %", color: "#00f0ff", gradientId: "nCpuG" }]}
+          yDomain={[0, 100]}
+        />
+        <RangeChartCard
+          title="Windows Host — CPU Usage (%)"
+          series={[{ query: PromQL.winCpuRangeAll, dataKey: "value", name: "CPU %", color: "#22d3ee", gradientId: "wCpuG" }]}
+          yDomain={[0, 100]}
+        />
+        <RangeChartCard
+          title="Linux Host — Memory Used (GB)"
+          series={[{ query: PromQL.nodeMemUsedRange, dataKey: "value", name: "Used GB", color: "#a855f7", gradientId: "nMemG" }]}
+          divisor={GB}
+          yDomain={[0, linuxHost?.memTotalGB ?? "auto"]}
+        />
+        <RangeChartCard
+          title="Windows Host — Memory Used (GB)"
+          series={[{ query: PromQL.winMemUsedRange, dataKey: "value", name: "Used GB", color: "#818cf8", gradientId: "wMemG" }]}
+          divisor={GB}
+          yDomain={[0, windowsHost?.memTotalGB ?? "auto"]}
+        />
+        <RangeChartCard
+          title="Linux Host — Load Average (1m)"
+          series={[{ query: PromQL.nodeLoadRange, dataKey: "load", name: "Load", color: "#f97316", gradientId: "nLoadG" }]}
+        />
       </div>
 
       <SectionHeading label="Storage // Disk Usage" />
@@ -407,12 +258,12 @@ export default function MetricsPage() {
       <SectionHeading label="Container Fleet // Overview" />
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard title="Total Containers" value={stats.total} subtitle={`${stats.running} running`} icon={<Container className="w-4 h-4" />} accentColor="#00f0ff" />
-        <StatCard title="Running" value={stats.running} subtitle={`${((stats.running / (stats.total || 1)) * 100).toFixed(0)}% of fleet`} icon={<CheckCircle className="w-4 h-4" />} accentColor="#34d399" />
-        <StatCard title="Unhealthy" value={stats.unhealthy} subtitle={stats.unhealthy > 0 ? "needs attention" : "all clear"} icon={<AlertTriangle className="w-4 h-4" />} accentColor="#fbbf24" />
-        <StatCard title="Stopped" value={stats.stopped} subtitle="inactive" icon={<XCircle className="w-4 h-4" />} accentColor="#f87171" />
-        <StatCard title="Container CPU" value={`${stats.totalCpu}%`} subtitle={`avg ${stats.avgCpu}% each`} icon={<Cpu className="w-4 h-4" />} accentColor="#00f0ff" />
-        <StatCard title="Container Mem" value={`${(stats.totalMemoryMB / 1024).toFixed(1)} GB`} subtitle={`of ${(stats.totalMemoryLimitMB / 1024).toFixed(1)} GB limit`} icon={<MemoryStick className="w-4 h-4" />} accentColor="#a855f7" />
+        <MetricsCard title="Total Containers" value={stats.total} subtitle={`${stats.running} running`} icon={<Container className="w-4 h-4" />} accentColor="#00f0ff" />
+        <MetricsCard title="Running" value={stats.running} subtitle={`${((stats.running / (stats.total || 1)) * 100).toFixed(0)}% of fleet`} icon={<CheckCircle className="w-4 h-4" />} accentColor="#34d399" />
+        <MetricsCard title="Unhealthy" value={stats.unhealthy} subtitle={stats.unhealthy > 0 ? "needs attention" : "all clear"} icon={<AlertTriangle className="w-4 h-4" />} accentColor="#fbbf24" />
+        <MetricsCard title="Stopped" value={stats.stopped} subtitle="inactive" icon={<XCircle className="w-4 h-4" />} accentColor="#f87171" />
+        <MetricsCard title="Container CPU" value={`${stats.totalCpu}%`} subtitle={`avg ${stats.avgCpu}% each`} icon={<Cpu className="w-4 h-4" />} accentColor="#00f0ff" />
+        <MetricsCard title="Container Mem" value={`${(stats.totalMemoryMB / 1024).toFixed(1)} GB`} subtitle={`of ${(stats.totalMemoryLimitMB / 1024).toFixed(1)} GB limit`} icon={<MemoryStick className="w-4 h-4" />} accentColor="#a855f7" />
       </div>
 
       {/* Pie Charts */}
@@ -466,90 +317,35 @@ export default function MetricsPage() {
       </div>
 
       {/* Time Graphs */}
-      <SectionHeading label="Container Telemetry // Time Series (1h)" />
+      <SectionHeading label="Container Telemetry // Time Series" />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="Container Aggregate CPU (%)">
-          <div style={{ height: 200 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={cpuData}>
-                <defs>
-                  <linearGradient id="mcpuGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#00f0ff" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#00f0ff" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
-                <XAxis dataKey="time" tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Area type="monotone" dataKey="value" name="CPU %" stroke="#00f0ff" strokeWidth={1.5} fill="url(#mcpuGrad)" dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
-
-        <ChartCard title="Container Aggregate Memory (MB)">
-          <div style={{ height: 200 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={memData}>
-                <defs>
-                  <linearGradient id="mmemGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#a855f7" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#a855f7" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
-                <XAxis dataKey="time" tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Area type="monotone" dataKey="value" name="Memory MB" stroke="#a855f7" strokeWidth={1.5} fill="url(#mmemGrad)" dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
-
-        <ChartCard title="Container Network Traffic (MB/s)">
-          <div style={{ height: 200 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={netData}>
-                <defs>
-                  <linearGradient id="mrxGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="#22d3ee" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="mtxGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#f97316" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="#f97316" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
-                <XAxis dataKey="time" tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Legend wrapperStyle={legendStyle} />
-                <Area type="monotone" dataKey="rx" name="RX" stroke="#22d3ee" strokeWidth={1.5} fill="url(#mrxGrad)" dot={false} />
-                <Area type="monotone" dataKey="tx" name="TX" stroke="#f97316" strokeWidth={1.5} fill="url(#mtxGrad)" dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
-
-        <ChartCard title="Container Disk I/O (MB/s)">
-          <div style={{ height: 200 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={diskData}>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
-                <XAxis dataKey="time" tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Legend wrapperStyle={legendStyle} />
-                <Line type="monotone" dataKey="read" name="READ" stroke="#34d399" strokeWidth={1.5} dot={false} />
-                <Line type="monotone" dataKey="write" name="WRITE" stroke="#fb7185" strokeWidth={1.5} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
+        <RangeChartCard
+          title="Container Aggregate CPU (%)"
+          series={[{ query: PromQL.cpuRangeAll, dataKey: "value", name: "CPU %", color: "#00f0ff", gradientId: "mcpuGrad" }]}
+        />
+        <RangeChartCard
+          title="Container Aggregate Memory (MB)"
+          series={[{ query: PromQL.memoryRangeAll, dataKey: "value", name: "Memory MB", color: "#a855f7", gradientId: "mmemGrad" }]}
+          divisor={MB}
+        />
+        <RangeChartCard
+          title="Container Network Traffic (MB/s)"
+          series={[
+            { query: PromQL.netRxRangeAll, dataKey: "rx", name: "RX", color: "#22d3ee", gradientId: "mrxGrad" },
+            { query: PromQL.netTxRangeAll, dataKey: "tx", name: "TX", color: "#f97316", gradientId: "mtxGrad" },
+          ]}
+          divisor={MB}
+        />
+        <RangeChartCard
+          title="Container Disk I/O (MB/s)"
+          type="line"
+          series={[
+            { query: PromQL.diskReadRangeAll, dataKey: "read", name: "READ", color: "#34d399", gradientId: "mrdG" },
+            { query: PromQL.diskWriteRangeAll, dataKey: "write", name: "WRITE", color: "#fb7185", gradientId: "mwrG" },
+          ]}
+          divisor={MB}
+        />
       </div>
     </main>
   )
