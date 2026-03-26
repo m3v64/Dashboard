@@ -113,6 +113,19 @@ export default function MetricsPage() {
     [containers],
   )
 
+  const networkPerContainer = useMemo(
+    () => [...containers]
+      .filter((c) => c.networkRxMB + c.networkTxMB > 0)
+      .sort((a, b) => (b.networkRxMB + b.networkTxMB) - (a.networkRxMB + a.networkTxMB))
+      .slice(0, 10)
+      .map((c) => ({
+        name: c.name.length > 16 ? c.name.slice(0, 16) + "…" : c.name,
+        rx: parseFloat(c.networkRxMB.toFixed(4)),
+        tx: parseFloat(c.networkTxMB.toFixed(4)),
+      })),
+    [containers],
+  )
+
   const diskPie = useMemo(() => {
     const items = []
     for (const h of hosts) {
@@ -325,14 +338,27 @@ export default function MetricsPage() {
           series={[{ query: PromQL.memoryRangeAll, dataKey: "value", name: "Memory MB", color: "#a855f7", gradientId: "mmemGrad" }]}
           divisor={MB}
         />
-        <RangeChartCard
-          title="Container Network Traffic (MB/s)"
-          series={[
-            { query: PromQL.netRxRangeAll, dataKey: "rx", name: "RX", color: "#22d3ee", gradientId: "mrxGrad" },
-            { query: PromQL.netTxRangeAll, dataKey: "tx", name: "TX", color: "#f97316", gradientId: "mtxGrad" },
-          ]}
-          divisor={MB}
-        />
+        <ChartCard title="Network I/O per Container (MB/s)">
+          <div style={{ height: 200 }}>
+            {networkPerContainer.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={networkPerContainer} layout="vertical" margin={{ left: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: tickFill }} axisLine={false} tickLine={false} width={120} />
+                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(0,240,255,0.06)" }} />
+                  <Legend wrapperStyle={legendStyle} />
+                  <Bar dataKey="rx" name="↓ RX" fill="#22d3ee" barSize={6} radius={[0, 2, 2, 0]} />
+                  <Bar dataKey="tx" name="↑ TX" fill="#f97316" barSize={6} radius={[0, 2, 2, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-600" style={{ fontFamily: "Share Tech Mono, monospace", fontSize: "11px" }}>
+                No network activity
+              </div>
+            )}
+          </div>
+        </ChartCard>
         <RangeChartCard
           title="Container Disk I/O (MB/s)"
           type="line"
